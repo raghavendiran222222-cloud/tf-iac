@@ -4,7 +4,7 @@ provider "azurerm" {
 }
 
 module "vnet" {
-  source              = "git::https://github.com/bdtmsd/tf-iac-vnet-module.git?ref=main"
+  source              = "git::https://github.com/bdtmsd/tf-iac-vnet-module.git?ref=v1.0.0"
   subscription_id     = var.subscription_id
   resource_group_name = var.resource_group_name
   location            = var.location
@@ -23,7 +23,7 @@ module "vnet" {
 }
 
 module "nsg_app" {
-  source              = "git::https://github.com/bdtmsd/tf-iac-nsg-module.git?ref=main"
+  source              = "git::https://github.com/bdtmsd/tf-iac-nsg-module.git?ref=v1.0.0"
   subscription_id     = var.subscription_id
   resource_group_name = var.resource_group_name
   location            = var.location
@@ -47,7 +47,7 @@ module "nsg_app" {
 }
 
 module "app_service" {
-  source                = "git::https://github.com/bdtmsd/tf-iac-app-service-module.git?ref=main"
+  source                = "git::https://github.com/bdtmsd/tf-iac-app-service-module.git?ref=v1.0.0"
   subscription_id       = var.subscription_id
   resource_group_name   = var.resource_group_name
   location              = var.location
@@ -73,7 +73,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "mysql" {
 }
 
 module "mysql" {
-  source                 = "git::https://github.com/bdtmsd/tf-iac-mysql-module.git?ref=main"
+  source                 = "git::https://github.com/bdtmsd/tf-iac-mysql-module.git?ref=v1.0.0"
   subscription_id        = var.subscription_id
   resource_group_name    = var.resource_group_name
   location               = var.location
@@ -87,7 +87,7 @@ module "mysql" {
 }
 
 module "storage" {
-  source                   = "git::https://github.com/bdtmsd/tf-iac-storage-module.git?ref=main"
+  source                   = "git::https://github.com/bdtmsd/tf-iac-storage-module.git?ref=v1.0.0"
   subscription_id          = var.subscription_id
   resource_group_name      = var.resource_group_name
   location                 = var.location
