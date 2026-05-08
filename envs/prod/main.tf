@@ -12,11 +12,18 @@ module "vnet" {
   address_space       = var.vnet_address_space
   subnets = {
     (local.subnet_app_name) = {
-      address_prefixes = ["10.20.1.0/24"]
+      address_prefix = "10.20.1.0/24"
+      delegation = {
+        name    = "delegation-app-service"
+        service = "Microsoft.Web/serverFarms"
+      }
     }
     (local.subnet_data_name) = {
-      address_prefixes = ["10.20.2.0/24"]
-      delegation       = "Microsoft.DBforMySQL/flexibleServers"
+      address_prefix = "10.20.2.0/24"
+      delegation = {
+        name    = "delegation-mysql"
+        service = "Microsoft.DBforMySQL/flexibleServers"
+      }
     }
   }
   tags = local.common_tags
