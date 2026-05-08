@@ -73,17 +73,17 @@ resource "azurerm_private_dns_zone_virtual_network_link" "mysql" {
 }
 
 module "mysql" {
-  source              = "git::https://github.com/bdtmsd/tf-iac-mysql-module.git?ref=main"
-  subscription_id     = var.subscription_id
-  resource_group_name = var.resource_group_name
-  location            = var.location
-  server_name         = local.mysql_name
-  sku_name            = var.mysql_sku
-  administrator_login = var.mysql_admin_username
+  source                 = "git::https://github.com/bdtmsd/tf-iac-mysql-module.git?ref=main"
+  subscription_id        = var.subscription_id
+  resource_group_name    = var.resource_group_name
+  location               = var.location
+  server_name            = local.mysql_name
+  sku_name               = var.mysql_sku
+  administrator_login    = var.mysql_admin_username
   administrator_password = var.mysql_admin_password
-  delegated_subnet_id = module.vnet.subnet_ids[local.subnet_data_name]
-  private_dns_zone_id = azurerm_private_dns_zone.mysql.id
-  tags                = local.common_tags
+  delegated_subnet_id    = module.vnet.subnet_ids[local.subnet_data_name]
+  private_dns_zone_id    = azurerm_private_dns_zone.mysql.id
+  tags                   = local.common_tags
 }
 
 module "storage" {
