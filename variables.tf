@@ -1,16 +1,12 @@
 variable "root_management_group_id" {
   type        = string
-  description = "The name/ID for the top-level management group created under the Tenant Root Group (e.g. 'bdt'). Used as prefix for all child management groups."
+  default     = "alz"
+  description = "The name of the root management group as defined by the ALZ architecture. Defaults to 'alz' for the standard architecture. Update when using a custom architecture with a different prefix."
 
   validation {
     condition     = can(regex("^[a-zA-Z0-9-]{2,90}$", var.root_management_group_id))
     error_message = "root_management_group_id must be 2-90 characters, alphanumeric and hyphens only."
   }
-}
-
-variable "root_management_group_display_name" {
-  type        = string
-  description = "The display name for the top-level management group (e.g. 'BDT')."
 }
 
 variable "subscription_id_management" {
@@ -49,10 +45,10 @@ variable "location" {
   description = "Azure region for policy remediation resources. Per FDD, East US 2 is the primary region."
 }
 
-variable "parent_management_group_id" {
+variable "parent_resource_id" {
   type        = string
   default     = ""
-  description = "ID of the parent management group under which the root ALZ management group is created. Leave empty to default to the Tenant Root Group."
+  description = "Resource name of the parent management group (no path prefix). Leave empty to use the Tenant Root Group (tenant ID resolved at runtime)."
 }
 
 variable "enable_telemetry" {

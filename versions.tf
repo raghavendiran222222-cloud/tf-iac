@@ -16,12 +16,12 @@ terraform {
     }
   }
 
-  cloud {
-    organization = "bdt-msd"
-    workspaces {
-      name = "tf-iac-azure-mgt-layer1"
-    }
-  }
+  # cloud {
+  #   organization = "bdt-msd"
+  #   workspaces {
+  #     name = "tf-iac-azure-mgt-layer1"
+  #   }
+  # }
 }
 
 provider "azurerm" {

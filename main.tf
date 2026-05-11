@@ -4,13 +4,13 @@ module "alz" {
   source  = "Azure/avm-ptn-alz/azurerm"
   version = "~> 0.11"
 
-  parent_management_group_id = local.parent_management_group_id
-  architecture_name          = "alz"
-  location                   = var.location
-  enable_telemetry           = var.enable_telemetry
+  architecture_name  = "alz"
+  location           = var.location
+  parent_resource_id = local.parent_resource_id
+  enable_telemetry   = var.enable_telemetry
 
-  management_group_settings = {
-    default_management_group_name = var.root_management_group_id
+  management_group_hierarchy_settings = {
+    default_management_group_name = "${var.root_management_group_id}-sandbox"
   }
 
   subscription_placement = {
