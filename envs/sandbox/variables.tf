@@ -30,19 +30,19 @@ variable "environment" {
 variable "vnet_address_space" {
   description = "Address space for the VNet."
   type        = list(string)
-  default     = ["10.20.0.0/16"]
+  default     = ["10.10.0.0/16"]
 }
 
 variable "app_sku" {
   description = "App Service Plan SKU (e.g. B1, P1v3)."
   type        = string
-  default     = "P1v3"
+  default     = "B1"
 }
 
 variable "mysql_sku" {
   description = "MySQL Flexible Server SKU name."
   type        = string
-  default     = "GP_Standard_D2ds_v4"
+  default     = "B_Standard_B1ms"
 }
 
 variable "mysql_admin_username" {
@@ -60,13 +60,13 @@ variable "mysql_admin_password" {
 variable "storage_replication" {
   description = "Storage account replication type (LRS, GRS, etc.)."
   type        = string
-  default     = "GRS"
+  default     = "LRS"
 }
 
 variable "enable_resource_lock" {
   description = "Apply CanNotDelete lock to all resources."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "log_analytics_workspace_id" {

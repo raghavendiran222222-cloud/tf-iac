@@ -4,7 +4,7 @@ terraform {
   cloud {
     organization = "bdtmsd"
     workspaces {
-      name = "mvp-workload-prod"
+      name = "mvp-workload-uat"
     }
   }
 
