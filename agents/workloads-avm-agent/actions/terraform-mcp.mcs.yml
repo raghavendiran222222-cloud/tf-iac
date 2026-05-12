@@ -1,0 +1,18 @@
+# Name: Terraform Registry MCP
+# Look up Azure Verified Module documentation, inputs, outputs, and pinned version details
+kind: TaskDialog
+modelDisplayName: Terraform Registry
+modelDescription: >
+  Use this tool to look up Terraform Registry module documentation, including input
+  variable schemas, output values, and version changelogs for Azure Verified Modules
+  (AVM). Also use it to validate azurerm provider resource arguments and verify
+  lifecycle behavior. Always query the pinned version (not latest) unless asked to
+  check for available upgrades.
+action:
+  kind: InvokeExternalAgentTaskAction
+  connectionReference: shared_terraform_registry
+  connectionProperties:
+    mode: Invoker
+  operationDetails:
+    kind: ModelContextProtocolMetadata
+    operationId: InvokeMCP

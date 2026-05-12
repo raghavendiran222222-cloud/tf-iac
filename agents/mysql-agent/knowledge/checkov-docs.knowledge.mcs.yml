@@ -1,0 +1,8 @@
+# Name: Checkov Terraform Security Policy Index
+# Checkov security check IDs, descriptions, and remediation for Terraform Azure resources
+# NOTE: PublicSiteSearchSource uses Bing to find relevant snippets within this URL scope.
+# It does NOT crawl or summarize full pages. Max URL depth: 2 levels beyond domain.
+kind: KnowledgeSourceConfiguration
+source:
+  kind: PublicSiteSearchSource
+  site: https://www.checkov.io/5.Policy%20Index/terraform.html

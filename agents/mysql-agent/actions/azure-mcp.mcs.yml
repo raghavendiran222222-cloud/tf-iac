@@ -1,0 +1,17 @@
+# Name: Azure MCP
+# Query Azure for MySQL Flexible Server SKUs, resource groups, and feature registrations
+kind: TaskDialog
+modelDisplayName: Azure Resource Manager
+modelDescription: >
+  Use this tool to query live Azure subscription data: list available MySQL Flexible
+  Server SKUs in a given region, confirm a resource group exists before writing
+  terraform.tfvars, and check subscription-level feature registrations needed for
+  MySQL Flexible Server. Requires the user's subscription ID from context.
+action:
+  kind: InvokeExternalAgentTaskAction
+  connectionReference: shared_azure
+  connectionProperties:
+    mode: Invoker
+  operationDetails:
+    kind: ModelContextProtocolMetadata
+    operationId: InvokeMCP

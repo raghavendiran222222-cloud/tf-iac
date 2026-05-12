@@ -1,0 +1,8 @@
+# Name: Azure Verified Modules (AVM) Documentation
+# AVM module registry — input schemas, output references, and version details for all pinned modules
+# NOTE: PublicSiteSearchSource uses Bing to find relevant snippets within this URL scope.
+# It does NOT crawl or summarize full pages. Max URL depth: 2 levels beyond domain.
+kind: KnowledgeSourceConfiguration
+source:
+  kind: PublicSiteSearchSource
+  site: https://registry.terraform.io/modules/Azure

@@ -1,0 +1,8 @@
+# Name: Azure MySQL Flexible Server Documentation
+# Azure product docs for MySQL Flexible Server — networking, SKUs, high availability, and zone redundancy
+# NOTE: PublicSiteSearchSource uses Bing to find relevant snippets within this URL scope.
+# It does NOT crawl or summarize full pages. Max URL depth: 2 levels beyond domain.
+kind: KnowledgeSourceConfiguration
+source:
+  kind: PublicSiteSearchSource
+  site: https://learn.microsoft.com/en-us/azure/mysql/flexible-server

@@ -1,0 +1,18 @@
+# Name: GitHub MCP
+# Read and write files, branches, and pull requests in the tf-iac GitHub repository
+kind: TaskDialog
+modelDisplayName: GitHub Repository Tools
+modelDescription: >
+  Use this tool to read existing Terraform files from the tf-iac GitHub repository,
+  check file contents on the mysql-scratch branch, list directory contents, create
+  or update files via commits, open pull requests, read GitHub Actions workflow YAML
+  files to diagnose CI failures, and review PR status. Always specify the branch
+  name (mysql-scratch) when reading module files.
+action:
+  kind: InvokeExternalAgentTaskAction
+  connectionReference: shared_github
+  connectionProperties:
+    mode: Invoker
+  operationDetails:
+    kind: ModelContextProtocolMetadata
+    operationId: InvokeMCP

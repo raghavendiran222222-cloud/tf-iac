@@ -1,0 +1,17 @@
+# Name: GitHub MCP
+# Read and write files, branches, and pull requests in the tf-iac GitHub repository
+kind: TaskDialog
+modelDisplayName: GitHub Repository Tools
+modelDescription: >
+  Use this tool to read existing Terraform files from the tf-iac GitHub repository,
+  check file contents on specific branches (use workloads-avm for this agent),
+  list directory contents, create or update files via commits, open pull requests,
+  and review CI check status. Always specify the branch name explicitly when reading.
+action:
+  kind: InvokeExternalAgentTaskAction
+  connectionReference: shared_github
+  connectionProperties:
+    mode: Invoker
+  operationDetails:
+    kind: ModelContextProtocolMetadata
+    operationId: InvokeMCP

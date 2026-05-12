@@ -1,0 +1,17 @@
+# Name: Terraform Registry MCP
+# Look up azurerm provider docs and MySQL Flexible Server resource arguments
+kind: TaskDialog
+modelDisplayName: Terraform Registry
+modelDescription: >
+  Use this tool to look up azurerm provider documentation for MySQL Flexible Server
+  resource arguments, computed attributes, and lifecycle behavior. Also use it to
+  verify attribute references when adding new variables to the module or when
+  diagnosing plan errors. Always query azurerm provider version ~> 4.71 docs.
+action:
+  kind: InvokeExternalAgentTaskAction
+  connectionReference: shared_terraform_registry
+  connectionProperties:
+    mode: Invoker
+  operationDetails:
+    kind: ModelContextProtocolMetadata
+    operationId: InvokeMCP

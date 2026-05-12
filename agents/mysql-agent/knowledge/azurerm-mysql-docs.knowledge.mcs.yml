@@ -1,0 +1,8 @@
+# Name: azurerm Provider MySQL Flexible Server Docs
+# Terraform azurerm provider reference for azurerm_mysql_flexible_server and azurerm_mysql_flexible_database
+# NOTE: PublicSiteSearchSource uses Bing to find relevant snippets within this URL scope.
+# It does NOT crawl or summarize full pages. Max URL depth: 2 levels beyond domain.
+kind: KnowledgeSourceConfiguration
+source:
+  kind: PublicSiteSearchSource
+  site: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/mysql_flexible_server

@@ -1,0 +1,18 @@
+# Name: Azure MCP
+# Query Azure subscriptions for SKUs, resource groups, and region availability
+kind: TaskDialog
+modelDisplayName: Azure Resource Manager
+modelDescription: >
+  Use this tool to query live Azure subscription data: list available SKUs for
+  MySQL Flexible Server and App Service Plan in a given region, verify that a
+  resource group exists, check subscription-level feature registrations, and
+  confirm region availability for a resource type. Requires the user's
+  subscription ID to be provided or already known from context.
+action:
+  kind: InvokeExternalAgentTaskAction
+  connectionReference: shared_azure
+  connectionProperties:
+    mode: Invoker
+  operationDetails:
+    kind: ModelContextProtocolMetadata
+    operationId: InvokeMCP
