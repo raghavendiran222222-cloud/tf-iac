@@ -33,7 +33,7 @@ resource "azurerm_resource_group" "main" {
 
 module "uami" {
   source  = "Azure/avm-res-managedidentity-userassignedidentity/azurerm"
-  version = "0.1.0"
+  version = "0.5.0"
 
   name                = "${local.name_prefix}-identity"
   resource_group_name = azurerm_resource_group.main.name
@@ -52,12 +52,12 @@ module "vnet" {
   source  = "Azure/avm-res-network-virtualnetwork/azurerm"
   version = "0.17.1"
 
-  name                = "${local.name_prefix}-vnet"
-  resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
-  address_space       = var.vnet_address_space
-  enable_telemetry    = false
-  tags                = local.tags
+  name             = "${local.name_prefix}-vnet"
+  parent_id        = azurerm_resource_group.main.id
+  location         = azurerm_resource_group.main.location
+  address_space    = var.vnet_address_space
+  enable_telemetry = false
+  tags             = local.tags
 
   subnets = {
     container_apps = {
@@ -187,13 +187,13 @@ module "log_analytics" {
   source  = "Azure/avm-res-operationalinsights-workspace/azurerm"
   version = "0.4.2"
 
-  name                = "${local.name_prefix}-law"
-  resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
-  sku                 = "PerGB2018"
-  retention_in_days   = 30
-  enable_telemetry    = false
-  tags                = local.tags
+  name                                      = "${local.name_prefix}-law"
+  resource_group_name                       = azurerm_resource_group.main.name
+  location                                  = azurerm_resource_group.main.location
+  log_analytics_workspace_sku               = "PerGB2018"
+  log_analytics_workspace_retention_in_days = 30
+  enable_telemetry                          = false
+  tags                                      = local.tags
 }
 
 # ── Key Vault ──────────────────────────────────────────────────────────────────
@@ -211,7 +211,6 @@ module "key_vault" {
   sku_name                      = "standard"
   soft_delete_retention_days    = 90
   purge_protection_enabled      = true
-  enable_rbac_authorization     = true
   public_network_access_enabled = false
   enable_telemetry              = false
   tags                          = local.tags
@@ -285,18 +284,14 @@ module "container_apps_environment" {
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
 
-  log_analytics_workspace_resource_id = module.log_analytics.resource_id
-  infrastructure_subnet_id            = module.vnet.subnets["container_apps"].resource_id
-  internal_load_balancer_enabled      = true
+  log_analytics_workspace = {
+    resource_id = module.log_analytics.resource_id
+  }
+  infrastructure_subnet_id       = module.vnet.subnets["container_apps"].resource_id
+  internal_load_balancer_enabled = true
 
-  workload_profiles = [
-    {
-      name                  = "Consumption"
-      workload_profile_type = "Consumption"
-      minimum_count         = 0
-      maximum_count         = 0
-    }
-  ]
+  # Consumption workload profile is always included; only add dedicated profiles here.
+  workload_profile = []
 
   enable_telemetry = false
   tags             = local.tags
@@ -332,6 +327,7 @@ module "mcp_github" {
 
   secrets = {
     "github-pat" = {
+      name                = "github-pat"
       key_vault_secret_id = azurerm_key_vault_secret.github_pat.versionless_id
       identity            = module.uami.resource_id
     }
@@ -353,19 +349,19 @@ module "mcp_github" {
         env = local.mcp_github.env
 
         liveness_probe = {
-          path             = "/health"
-          port             = local.mcp_github.port
-          transport        = "HTTP"
-          initial_delay    = 10
-          interval_seconds = 30
+          path                    = "/health"
+          port                    = local.mcp_github.port
+          transport               = "HTTP"
+          initial_delay           = 10
+          interval_seconds        = 30
           failure_count_threshold = 3
         }
 
         readiness_probe = {
-          path             = "/health"
-          port             = local.mcp_github.port
-          transport        = "HTTP"
-          interval_seconds = 10
+          path                    = "/health"
+          port                    = local.mcp_github.port
+          transport               = "HTTP"
+          interval_seconds        = 10
           failure_count_threshold = 3
         }
       }
@@ -427,19 +423,19 @@ module "mcp_azure" {
         ])
 
         liveness_probe = {
-          path             = "/health"
-          port             = local.mcp_azure.port
-          transport        = "HTTP"
-          initial_delay    = 10
-          interval_seconds = 30
+          path                    = "/health"
+          port                    = local.mcp_azure.port
+          transport               = "HTTP"
+          initial_delay           = 10
+          interval_seconds        = 30
           failure_count_threshold = 3
         }
 
         readiness_probe = {
-          path             = "/health"
-          port             = local.mcp_azure.port
-          transport        = "HTTP"
-          interval_seconds = 10
+          path                    = "/health"
+          port                    = local.mcp_azure.port
+          transport               = "HTTP"
+          interval_seconds        = 10
           failure_count_threshold = 3
         }
       }
@@ -484,6 +480,7 @@ module "mcp_terraform" {
 
   secrets = {
     "hcp-terraform-token" = {
+      name                = "hcp-terraform-token"
       key_vault_secret_id = azurerm_key_vault_secret.hcp_terraform_token.versionless_id
       identity            = module.uami.resource_id
     }
@@ -503,19 +500,19 @@ module "mcp_terraform" {
         env = local.mcp_terraform.env
 
         liveness_probe = {
-          path             = "/health"
-          port             = local.mcp_terraform.port
-          transport        = "HTTP"
-          initial_delay    = 10
-          interval_seconds = 30
+          path                    = "/health"
+          port                    = local.mcp_terraform.port
+          transport               = "HTTP"
+          initial_delay           = 10
+          interval_seconds        = 30
           failure_count_threshold = 3
         }
 
         readiness_probe = {
-          path             = "/health"
-          port             = local.mcp_terraform.port
-          transport        = "HTTP"
-          interval_seconds = 10
+          path                    = "/health"
+          port                    = local.mcp_terraform.port
+          transport               = "HTTP"
+          interval_seconds        = 10
           failure_count_threshold = 3
         }
       }
@@ -569,7 +566,7 @@ resource "azuread_service_principal" "copilot_studio" {
 
 module "apim" {
   source  = "Azure/avm-res-apimanagement-service/azurerm"
-  version = "0.0.7"
+  version = "0.0.8"
 
   name                = "${local.name_prefix}-apim"
   resource_group_name = azurerm_resource_group.main.name
@@ -579,10 +576,8 @@ module "apim" {
   sku_name            = var.apim_sku_name
   enable_telemetry    = false
 
-  virtual_network_type = "External"
-  virtual_network_configuration = {
-    subnet_id = module.vnet.subnets["apim"].resource_id
-  }
+  virtual_network_type      = "External"
+  virtual_network_subnet_id = module.vnet.subnets["apim"].resource_id
 
   tags = local.tags
 }
@@ -595,7 +590,7 @@ resource "azurerm_monitor_diagnostic_setting" "apim" {
   log_analytics_workspace_id = module.log_analytics.resource_id
 
   enabled_log { category = "GatewayLogs" }
-  metric { category = "AllMetrics"; enabled = true }
+  enabled_metric { category = "AllMetrics" }
 }
 
 # ── APIM Global Policy — JWT validation + security headers ────────────────────
@@ -665,9 +660,9 @@ resource "azurerm_api_management_policy" "global" {
 resource "azurerm_api_management_backend" "github" {
   name                = "github-mcp"
   resource_group_name = azurerm_resource_group.main.name
-  api_management_name = module.apim.resource.name
+  api_management_name = module.apim.name
   protocol            = "http"
-  url                 = "https://${module.mcp_github.resource.ingress[0].fqdn}"
+  url                 = "https://${module.mcp_github.fqdn_url}"
   tls {
     validate_certificate_chain = true
     validate_certificate_name  = true
@@ -677,9 +672,9 @@ resource "azurerm_api_management_backend" "github" {
 resource "azurerm_api_management_backend" "azure" {
   name                = "azure-mcp"
   resource_group_name = azurerm_resource_group.main.name
-  api_management_name = module.apim.resource.name
+  api_management_name = module.apim.name
   protocol            = "http"
-  url                 = "https://${module.mcp_azure.resource.ingress[0].fqdn}"
+  url                 = "https://${module.mcp_azure.fqdn_url}"
   tls {
     validate_certificate_chain = true
     validate_certificate_name  = true
@@ -689,9 +684,9 @@ resource "azurerm_api_management_backend" "azure" {
 resource "azurerm_api_management_backend" "terraform" {
   name                = "terraform-mcp"
   resource_group_name = azurerm_resource_group.main.name
-  api_management_name = module.apim.resource.name
+  api_management_name = module.apim.name
   protocol            = "http"
-  url                 = "https://${module.mcp_terraform.resource.ingress[0].fqdn}"
+  url                 = "https://${module.mcp_terraform.fqdn_url}"
   tls {
     validate_certificate_chain = true
     validate_certificate_name  = true
@@ -728,7 +723,7 @@ resource "azurerm_api_management_api" "mcp" {
 
   name                  = each.value.name
   resource_group_name   = azurerm_resource_group.main.name
-  api_management_name   = module.apim.resource.name
+  api_management_name   = module.apim.name
   revision              = "1"
   display_name          = each.value.display_name
   path                  = each.value.path
@@ -775,7 +770,7 @@ resource "azurerm_api_management_api_policy" "mcp" {
   for_each = local.apim_apis
 
   api_name            = azurerm_api_management_api.mcp[each.key].name
-  api_management_name = module.apim.resource.name
+  api_management_name = module.apim.name
   resource_group_name = azurerm_resource_group.main.name
 
   xml_content = <<-XML
@@ -800,7 +795,7 @@ resource "azurerm_api_management_api_policy" "mcp" {
 
 resource "azurerm_api_management_product" "mcp" {
   product_id            = "mcp-servers"
-  api_management_name   = module.apim.resource.name
+  api_management_name   = module.apim.name
   resource_group_name   = azurerm_resource_group.main.name
   display_name          = "MCP Servers"
   description           = "GitHub, Azure, and Terraform MCP servers for Copilot Studio"
@@ -813,6 +808,6 @@ resource "azurerm_api_management_product_api" "mcp" {
 
   api_name            = azurerm_api_management_api.mcp[each.key].name
   product_id          = azurerm_api_management_product.mcp.product_id
-  api_management_name = module.apim.resource.name
+  api_management_name = module.apim.name
   resource_group_name = azurerm_resource_group.main.name
 }

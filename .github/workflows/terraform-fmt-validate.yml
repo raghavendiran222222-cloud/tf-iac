@@ -1,0 +1,41 @@
+name: Terraform Format & Validate
+
+on:
+  push:
+    branches-ignore:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  fmt-validate:
+    name: fmt + validate (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - non-prod/infra-agent
+          - non-prod/mvp-app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~> 1.9"
+
+      - name: Terraform Format Check
+        working-directory: ${{ matrix.module }}
+        run: terraform fmt -check -recursive -diff
+
+      - name: Terraform Init (no backend)
+        working-directory: ${{ matrix.module }}
+        run: terraform init -backend=false
+
+      - name: Terraform Validate
+        working-directory: ${{ matrix.module }}
+        run: terraform validate

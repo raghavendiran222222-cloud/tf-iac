@@ -1,0 +1,61 @@
+name: Terraform Tests (pytest / tftest)
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "non-prod/**/tests/**"
+      - "non-prod/**/*.tf"
+      - ".github/workflows/tftest.yml"
+
+jobs:
+  tftest:
+    name: tftest (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - module: non-prod/infra-agent
+            test_dir: non-prod/infra-agent/tests
+          - module: non-prod/mvp-app
+            test_dir: non-prod/mvp-app/tests
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~> 1.9"
+          terraform_wrapper: false  # Required for python-tftest to capture output
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: pip install pytest python-tftest
+
+      - name: Terraform Init (no backend)
+        working-directory: ${{ matrix.module }}
+        run: terraform init -backend=false
+
+      - name: Run pytest
+        working-directory: ${{ matrix.module }}
+        env:
+          TF_CLI_ARGS_init: "-backend=false"
+          TF_VAR_mysql_admin_password: "TestPassword123!"
+        run: pytest tests/ -v --tb=short
+
+      - name: Run native terraform test (if .tftest.hcl files exist)
+        working-directory: ${{ matrix.module }}
+        run: |
+          if ls tests/*.tftest.hcl 2>/dev/null; then
+            terraform test
+          else
+            echo "No .tftest.hcl files found, skipping native terraform test"
+          fi
