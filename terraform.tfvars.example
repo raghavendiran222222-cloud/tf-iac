@@ -1,0 +1,40 @@
+# Copy to terraform.tfvars for local runs. Never commit terraform.tfvars.
+#
+# ── HCP Terraform Cloud ────────────────────────────────────────────────────────
+# Secrets (github-pat, hcp-terraform-token) live in HCP Vault Secrets.
+# HCP provider auth is handled by workspace env vars — NOT stored here:
+#
+#   In HCP Terraform workspace → Variables → add as "Environment variable" (sensitive):
+#     HCP_CLIENT_ID     = <your HCP service principal client ID>
+#     HCP_CLIENT_SECRET = <your HCP service principal client secret>
+#
+# ── Required vars ──────────────────────────────────────────────────────────────
+
+subscription_id = "00000000-0000-0000-0000-000000000000"
+tenant_id       = "00000000-0000-0000-0000-000000000000"
+location        = "eastus2"
+project         = "mcp"
+environment     = "dev"
+
+# HCP
+hcp_project_id     = "00000000-0000-0000-0000-000000000000"   # HCP Portal → Settings → General
+hcp_vault_app_name = "mcp-servers"                            # HCP Vault Secrets app name
+hcp_terraform_org  = "my-hcp-org"                             # injected as TFC_ORG in Terraform MCP
+
+# Networking
+vnet_address_space         = ["10.0.0.0/16"]
+container_apps_subnet_cidr = "10.0.0.0/23"
+apim_subnet_cidr           = "10.0.4.0/28"
+
+# APIM
+apim_publisher_name  = "Platform Team"
+apim_publisher_email = "platform@example.com"
+apim_sku_name        = "Developer_1"   # Developer_1 = dev/test; Premium_1 = prod (HA + SLA)
+
+# Copilot Studio
+copilot_studio_tenant_id = "00000000-0000-0000-0000-000000000000"
+
+tags = {
+  owner       = "platform-team"
+  cost_center = "engineering"
+}
