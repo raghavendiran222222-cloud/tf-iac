@@ -35,6 +35,13 @@ apim_sku_name        = "Developer_1"   # Developer_1 = dev/test; Premium_1 = pro
 copilot_studio_tenant_id = "00000000-0000-0000-0000-000000000000"
 
 tags = {
-  owner       = "platform-team"
-  cost_center = "engineering"
+  Application         = "BDT MVP"
+  DevOwner            = "team@bdtmsd.com"
+  BusinessOwner       = "team@bdtmsd.com"
+  Environment         = "sandbox"
+  DataClassification  = "Internal"
+  BusinessCriticality = "Low"
+  IACRepository       = "https://github.com/bdtmsd/alz-landingzones-infra"
+  CostCenter          = ""
+  Compliance          = ""
 }

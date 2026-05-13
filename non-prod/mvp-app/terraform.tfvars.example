@@ -29,7 +29,7 @@ tags = {
   Environment         = "sandbox"
   DataClassification  = "Internal"
   BusinessCriticality = "Low"
-  IACRepository       = "https://github.com/bdtmsd/tf-iac"
+  IACRepository       = "https://github.com/bdtmsd/alz-landingzones-infra"
   CostCenter          = ""
   Compliance          = ""
 }
