@@ -143,7 +143,7 @@ module "mysql" {
 }
 
 module "storage" {
-  source = "git::https://github.com/raghavendiran222222-cloud/tf-iac.git//storage-module?ref=storage-module-v0.1.0"
+  source = "git::https://github.com/bdtmsd/alz-modules.git//storage-module?ref=storage-module-v0.1.0"
 
   subscription_id      = var.subscription_id
   resource_group_name  = var.resource_group_name

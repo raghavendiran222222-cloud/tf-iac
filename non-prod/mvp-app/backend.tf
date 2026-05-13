@@ -1,9 +1,10 @@
 terraform {
   cloud {
-    organization = "<organization-name>"
+    organization = "bdtmsd"
 
     workspaces {
-      name = "mvp-app"
+      name = "alz-landingzones-infra"
+      tags = ["non-prod"]
     }
   }
 }

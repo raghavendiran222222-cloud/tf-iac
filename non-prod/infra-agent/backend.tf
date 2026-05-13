@@ -1,9 +1,5 @@
 terraform {
-  cloud {
-    organization = "<organization-name>"
-
-    workspaces {
-      name = "infra-agent"
-    }
+  backend "local" {
+    path = "terraform.tfstate"
   }
 }
