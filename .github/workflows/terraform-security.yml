@@ -1,0 +1,49 @@
+name: Terraform Security Scan
+
+on:
+  push:
+    branches-ignore:
+      - main
+    paths:
+      - 'non-prod/**'
+      - '.github/workflows/terraform-security.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'non-prod/**'
+      - '.github/workflows/terraform-security.yml'
+
+jobs:
+  security:
+    name: tfsec (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - non-prod/infra-agent
+          - non-prod/mvp-app
+
+    permissions:
+      contents: read
+      security-events: write  # required to upload SARIF results
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run tfsec
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: ${{ matrix.module }}
+          soft_fail: false
+          format: sarif
+          sarif_file: tfsec-results.sarif
+
+      - name: Upload SARIF to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: tfsec-results.sarif
+          category: tfsec-${{ matrix.module }}
