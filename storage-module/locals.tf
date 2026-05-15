@@ -1,32 +1,29 @@
 locals {
-  resource_group_id = "/subscriptions/${var.subscription_id}/resourceGroups/${var.resource_group_name}"
+  storage_enabled = var.storage != null
 
-  merged_tags = merge(var.tags, {
-    ManagedBy   = "Terraform"
-    CreatedDate = formatdate("YYYY-MM-DD", timestamp())
-  })
-
-  access_type_map = {
-    "private"   = "None"
-    "blob"      = "Blob"
-    "container" = "Container"
+  # Maps full Azure region names to the short abbreviations used in resource names.
+  # Extend as additional regions are onboarded.
+  _region_abbr_map = {
+    eastus             = "eus"
+    eastus2            = "eus2"
+    centralus          = "cus"
+    westus             = "wus"
+    westus2            = "wus2"
+    northcentralus     = "ncus"
+    southcentralus     = "scus"
+    westcentralus      = "wcus"
+    eastasia           = "eas"
+    southeastasia      = "sea"
+    northeurope        = "neu"
+    westeurope         = "weu"
+    uksouth            = "uks"
+    ukwest             = "ukw"
+    australiaeast      = "aue"
+    australiasoutheast = "ause"
   }
 
-  avm_containers = {
-    for name, container in var.blob_containers : name => {
-      name          = name
-      public_access = lookup(local.access_type_map, container.access_type, "None")
-    }
-  }
+  region_abbr = lookup(local._region_abbr_map, lower(var.location), var.location)
 
-  lock_config = var.enable_resource_lock ? {
-    kind = "CanNotDelete"
-    name = "lock-${var.storage_account_name}"
-  } : null
-
-  diagnostic_settings = var.log_analytics_workspace_id != "" ? {
-    "law" = {
-      workspace_resource_id = var.log_analytics_workspace_id
-    }
-  } : {}
+  # Merge the env tag from var.env so it stays consistent with the naming convention.
+  merged_tags = merge(var.tags, { Environment = var.env })
 }
