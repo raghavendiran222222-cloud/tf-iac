@@ -1,26 +1,32 @@
-provider "azurerm" {
-  features {}
-  subscription_id = var.subscription_id
+module "naming" {
+  source  = "Azure/naming/azurerm"
+  version = "0.4.2"
+
+  suffix = [var.workload, var.env, local.region_abbr]
 }
 
-module "storage" {
-  source  = "Azure/avm-res-storage-storageaccount/azurerm"
-  version = "0.6.8"
-
-  name                = var.storage_account_name
+resource "azurerm_storage_account" "this" {
+  count               = local.storage_enabled ? 1 : 0
+  name                = module.naming.storage_account.name_unique
   resource_group_name = var.resource_group_name
   location            = var.location
+  tags                = local.merged_tags
 
-  account_tier             = var.account_tier
-  account_replication_type = var.account_replication_type
-  account_kind             = var.account_kind
+  account_tier             = var.storage.account_tier
+  account_replication_type = var.storage.account_replication_type
 
-  https_traffic_only_enabled = var.enable_https_traffic_only
-  min_tls_version            = var.min_tls_version
+  # Enforce TLS 1.2 as the minimum — disallows older insecure connections
+  min_tls_version = "TLS1_2"
 
-  containers                          = local.avm_containers
-  lock                                = local.lock_config
-  diagnostic_settings_storage_account = local.diagnostic_settings
-  enable_telemetry                    = false
-  tags                                = local.merged_tags
+  blob_properties {
+    versioning_enabled = var.storage.enable_versioning
+  }
+}
+
+resource "azurerm_storage_container" "this" {
+  for_each = local.storage_enabled ? { for c in var.storage.containers : c.name => c } : {}
+
+  name                  = each.key
+  storage_account_id    = azurerm_storage_account.this[0].id
+  container_access_type = each.value.access_type
 }
