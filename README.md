@@ -18,6 +18,6 @@ Reference a module from this repo using a git source:
 
 ```hcl
 module "storage" {
-  source = "git::https://github.com/<org>/tf-iac.git//storage-module?ref=storage-module/v1.0.0"
+  source = "git::https://github.com/bdtmsd/alz-modules.git//storage-module?ref=storage-module/v1.0.0"
 }
 ```
