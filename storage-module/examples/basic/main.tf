@@ -8,12 +8,5 @@ module "storage" {
   location            = var.location
   tags                = var.tags
 
-  storage = {
-    account_tier             = "Standard"
-    account_replication_type = "LRS"
-    enable_versioning        = false
-    containers = [
-      { name = "uploads", access_type = "private" }
-    ]
-  }
+  storage = var.storage
 }

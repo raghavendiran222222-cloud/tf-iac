@@ -95,3 +95,12 @@ terraform plan -var-file="terraform.tfvars"
 pip install -r tests/requirements.txt
 pytest tests/ -v
 ```
+
+---
+
+## Maintainers
+
+| Name | Role | Email |
+|------|------|-------|
+| Raghavendiran N | Senior DevOps Engineer | raghavendirann@bdtmsd.com |
+| Sakthivel Manohar | Senior DevOps Engineer | smanohar@bdtmsd.com |
