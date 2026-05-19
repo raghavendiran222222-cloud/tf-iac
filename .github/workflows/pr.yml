@@ -1,0 +1,39 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+concurrency:
+  group: pr-${{ github.event.number }}
+  cancel-in-progress: true
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.detect.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: detect
+        run: bash scripts/detect-changed-envs.sh >> "$GITHUB_OUTPUT"
+
+  validate:
+    needs: detect
+    if: needs.detect.outputs.changed != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJson(needs.detect.outputs.changed) }}
+    uses: ./.github/workflows/tf-validate.yml
+    with:
+      working-directory: non-prod/${{ matrix.target }}
+      environment: non-prod-plan
+    secrets: inherit

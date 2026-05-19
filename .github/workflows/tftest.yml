@@ -1,39 +1,49 @@
-name: Terraform Tests (pytest / tftest)
+name: Terraform Tests
 
 on:
   pull_request:
-    branches:
-      - main
+    branches: [main]
     paths:
       - "non-prod/**/tests/**"
       - "non-prod/**/*.tf"
       - ".github/workflows/tftest.yml"
 
+concurrency:
+  group: tftest-${{ github.event.number }}
+  cancel-in-progress: true
+
 jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.detect.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: detect
+        run: bash scripts/detect-changed-envs.sh >> "$GITHUB_OUTPUT"
+
   tftest:
-    name: tftest (${{ matrix.module }})
+    needs: detect
+    if: needs.detect.outputs.changed != '[]'
+    name: tftest (${{ matrix.target }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - module: non-prod/infra-agent
-            test_dir: non-prod/infra-agent/tests
-          - module: non-prod/mvp-app
-            test_dir: non-prod/mvp-app/tests
+        target: ${{ fromJson(needs.detect.outputs.changed) }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "~> 1.9"
-          terraform_wrapper: false  # Required for python-tftest to capture output
+          # terraform_wrapper must be false so python-tftest can capture output
+          terraform_wrapper: false
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
@@ -41,21 +51,28 @@ jobs:
         run: pip install pytest python-tftest
 
       - name: Terraform Init (no backend)
-        working-directory: ${{ matrix.module }}
+        working-directory: non-prod/${{ matrix.target }}
         run: terraform init -backend=false
+        env:
+          TF_CLI_ARGS_init: "-backend=false"
 
-      - name: Run pytest
-        working-directory: ${{ matrix.module }}
+      - name: pytest (plan-level assertions)
+        working-directory: non-prod/${{ matrix.target }}
         env:
           TF_CLI_ARGS_init: "-backend=false"
           TF_VAR_mysql_admin_password: "TestPassword123!"
-        run: pytest tests/ -v --tb=short
+        run: |
+          if ls tests/*.py 2>/dev/null; then
+            pytest tests/ -v --tb=short
+          else
+            echo "No pytest files found in tests/ — skipping"
+          fi
 
-      - name: Run native terraform test (if .tftest.hcl files exist)
-        working-directory: ${{ matrix.module }}
+      - name: terraform test (native HCL tests)
+        working-directory: non-prod/${{ matrix.target }}
         run: |
           if ls tests/*.tftest.hcl 2>/dev/null; then
-            terraform test
+            terraform test -test-directory=tests
           else
-            echo "No .tftest.hcl files found, skipping native terraform test"
+            echo "No .tftest.hcl files found — skipping"
           fi

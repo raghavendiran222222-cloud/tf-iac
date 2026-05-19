@@ -1,0 +1,21 @@
+framework:
+  - terraform_plan
+
+# Checks skipped because they conflict with AVM module defaults or are
+# enforced at runtime by Azure Policy (no value in double-checking at PR time).
+skip-check:
+  # AVM manages storage encryption settings internally
+  - CKV_AZURE_33   # storage queue logging
+  - CKV_AZURE_36   # storage network default action (handled by AVM + Azure Policy)
+  # Managed disk encryption at rest is the Azure platform default since 2017
+  - CKV_AZURE_93
+  # Azure App Service auth is optional for internal tools
+  - CKV_AZURE_13
+  # Log retention period — set per workload via Log Analytics, not TF resource
+  - CKV_AZURE_37
+
+# Produce SARIF so findings surface in the GitHub Security tab
+output:
+  - sarif
+
+soft-fail: false

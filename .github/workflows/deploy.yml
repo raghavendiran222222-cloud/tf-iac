@@ -1,0 +1,40 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.detect.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: detect
+        run: bash scripts/detect-changed-envs.sh >> "$GITHUB_OUTPUT"
+
+  nonprod:
+    needs: detect
+    if: needs.detect.outputs.changed != '[]'
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        target: ${{ fromJson(needs.detect.outputs.changed) }}
+    uses: ./.github/workflows/tf-apply.yml
+    with:
+      working-directory: non-prod/${{ matrix.target }}
+      environment: non-prod-${{ matrix.target }}
+    secrets: inherit
