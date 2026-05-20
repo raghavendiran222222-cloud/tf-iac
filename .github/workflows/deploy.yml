@@ -33,7 +33,7 @@ jobs:
       max-parallel: 4
       matrix:
         target: ${{ fromJson(needs.detect.outputs.changed) }}
-    uses: ./.github/workflows/tf-apply.yml
+    uses: btdmsd/github-actions-workflows/.github/workflows/tf-apply.yml@main
     with:
       working-directory: non-prod/${{ matrix.target }}
       environment: non-prod-${{ matrix.target }}
