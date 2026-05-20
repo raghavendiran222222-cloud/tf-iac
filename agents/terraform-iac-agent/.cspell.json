@@ -1,0 +1,20 @@
+{
+  "version": "0.2",
+  "language": "en",
+  "words": [
+    "bdtmsd", "landingzones", "alz", "tfvars", "tftest", "tflint",
+    "azurerm", "azapi", "azuread", "nonprod", "mgmt",
+    "eastus", "eastus2", "westus", "westus2", "centralus", "northcentralus",
+    "southcentralus", "westcentralus", "northeurope", "westeurope",
+    "uksouth", "ukwest", "eastasia", "southeastasia", "australiaeast",
+    "australiasoutheast", "ncus", "scus", "wcus", "eus", "eus2",
+    "wus", "wus2", "cus", "neu", "weu", "uks", "ukw", "eas", "sea",
+    "aue", "ause", "snet", "vnet", "apim", "stbdt", "privatelink",
+    "formatdate", "pytest", "tftest", "checkov", "rego", "FEDRAMP",
+    "bdtmsd", "infra", "keyvault", "serverfarm", "virtualnetwork",
+    "networksecuritygroup", "managedenvironment", "containerapp",
+    "operationalinsights", "dbformysql", "apimanagement"
+  ],
+  "ignoreWords": [],
+  "ignorePaths": ["**/__pycache__/**", "**/*.pyc"]
+}

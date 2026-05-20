@@ -1,0 +1,9 @@
+kind: ConnectionReferences
+schemaVersion: "2.0"
+connectionReferences:
+  - name: GitHubConnection
+    displayName: GitHub (terraform-iac-agent)
+    connectorId: /providers/Microsoft.PowerApps/apis/shared_github
+    description: >
+      GitHub connection used by all topics that create branches, commit files,
+      and open pull requests on alz-modules and alz-landingzones-infra repos.

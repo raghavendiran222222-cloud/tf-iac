@@ -1,0 +1,125 @@
+# Create Module — generates a new reusable Terraform module on the alz-modules branch
+kind: AdaptiveDialog
+beginDialog:
+  kind: OnRecognizedIntent
+  id: main
+  intent:
+    triggerQueries:
+      - create module
+      - new module
+      - build a module
+      - add to alz-modules
+      - reusable module
+      - create a terraform module
+      - create a new reusable module
+      - I want a new module
+      - add a module to alz-modules
+  actions:
+    - kind: SendActivity
+      id: sendMessage_createModuleStart
+      activity: Great! I will help you create a new reusable Terraform module on the alz-modules branch.
+
+    - kind: Question
+      id: question_moduleName
+      alwaysPrompt: false
+      variable: init:Topic.ModuleName
+      prompt: What should the module be named? Use lowercase with hyphens (e.g. keyvault-module, networking-module, mysql-module).
+      entity: StringPrebuiltEntity
+
+    - kind: Question
+      id: question_resourceTypes
+      alwaysPrompt: false
+      variable: init:Topic.ResourceTypes
+      prompt: Which Azure resource(s) should this module manage? (e.g. Key Vault, MySQL Flexible Server, Virtual Network + NSG, Container App)
+      entity: StringPrebuiltEntity
+
+    - kind: Question
+      id: question_optionalFeatures
+      alwaysPrompt: false
+      variable: init:Topic.OptionalFeatures
+      prompt: Any optional features to include? (e.g. private endpoints, diagnostic settings, lifecycle policies, soft delete, resource locks). Type none to skip.
+      entity: StringPrebuiltEntity
+
+    - kind: SendActivity
+      id: sendMessage_generating
+      activity: Generating module files for {Topic.ModuleName}. This includes main.tf, variables.tf, outputs.tf, locals.tf, versions.tf, CHANGELOG.md, README.md, and examples/basic/main.tf.
+
+    - kind: SetVariable
+      id: setVar_featureBranch
+      variable: Topic.FeatureBranch
+      value: '=Concatenate(Topic.ModuleName, "-agent")'
+
+    - kind: InvokeFlowAction
+      id: invokeFlow_getBranchSHA
+      flowId: GetBranchSHA
+      input:
+        parameters:
+          branch: alz-modules
+      output:
+        binding:
+          baseSha: =Topic.BaseSHA
+
+    - kind: InvokeFlowAction
+      id: invokeFlow_createBranch
+      flowId: CreateGitHubBranch
+      input:
+        parameters:
+          newBranch: =Topic.FeatureBranch
+          baseSha: =Topic.BaseSHA
+          targetRepo: alz-modules
+
+    - kind: InvokeFlowAction
+      id: invokeFlow_generateAndCommitModule
+      flowId: GenerateAndCommitModuleFiles
+      input:
+        parameters:
+          moduleName: =Topic.ModuleName
+          resourceTypes: =Topic.ResourceTypes
+          optionalFeatures: =Topic.OptionalFeatures
+          branch: =Topic.FeatureBranch
+          targetRepo: alz-modules
+
+    - kind: SetVariable
+      id: setVar_prTitle
+      variable: Topic.PrTitle
+      value: '=Concatenate("feat: add ", Topic.ModuleName, " module (agent)")'
+
+    - kind: SetVariable
+      id: setVar_prBody
+      variable: Topic.PrBody
+      value: '=Concatenate("## Summary", Char(10), "- Module: ", Topic.ModuleName, Char(10), "- Resources: ", Topic.ResourceTypes, Char(10), "- Features: ", Topic.OptionalFeatures, Char(10), Char(10), "## Checklist", Char(10), "- terraform validate", Char(10), "- tflint", Char(10), "- checkov -d .", Char(10), "- Tags validated FDD Table 12")'
+
+    - kind: InvokeFlowAction
+      id: invokeFlow_createPR
+      flowId: CreateGitHubPR
+      input:
+        parameters:
+          featureBranch: =Topic.FeatureBranch
+          baseBranch: alz-modules
+          targetRepo: alz-modules
+          prTitle: =Topic.PrTitle
+          prBody: =Topic.PrBody
+      output:
+        binding:
+          prUrl: =Topic.PullRequestUrl
+
+    - kind: SendActivity
+      id: sendMessage_prCreated
+      activity:
+        text:
+          - |
+            Module **{Topic.ModuleName}** created on branch **{Topic.FeatureBranch}**.
+
+            **Files generated:**
+            - {Topic.ModuleName}/main.tf
+            - {Topic.ModuleName}/variables.tf
+            - {Topic.ModuleName}/outputs.tf
+            - {Topic.ModuleName}/locals.tf
+            - {Topic.ModuleName}/versions.tf
+            - {Topic.ModuleName}/CHANGELOG.md
+            - {Topic.ModuleName}/README.md
+            - {Topic.ModuleName}/examples/basic/main.tf
+
+            **Pull Request:** {Topic.PullRequestUrl}
+
+            Would you like me to generate tests for this module or explain any generated file?

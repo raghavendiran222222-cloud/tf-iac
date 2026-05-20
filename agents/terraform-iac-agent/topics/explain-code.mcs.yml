@@ -1,0 +1,136 @@
+# Explain Code — learning topic that reads and explains Terraform files in plain English
+kind: AdaptiveDialog
+beginDialog:
+  kind: OnRecognizedIntent
+  id: main
+  intent:
+    triggerQueries:
+      - explain
+      - what does
+      - how does
+      - walk me through
+      - teach me
+      - help me understand
+      - what is
+      - explain the code
+      - explain this file
+      - how does the backend work
+      - what does locals.tf do
+      - explain the naming convention
+      - how does the module work
+      - learning
+      - I want to learn
+      - explain terraform
+      - what is this terraform doing
+  actions:
+    - kind: SendActivity
+      id: sendMessage_ExplainStart
+      activity: Happy to explain! I will read the relevant file from the repository and walk you through it in plain English.
+
+    - kind: Question
+      id: question_TargetFile
+      alwaysPrompt: false
+      variable: init:Topic.TargetFile
+      prompt: "Which file or concept would you like explained? Examples: storage-module/locals.tf, mvp-app/backend.tf, mvp-app/main.tf, mvp-app/variables.tf, storage-module/outputs.tf, or type naming convention."
+      entity: StringPrebuiltEntity
+
+    - kind: Question
+      id: question_TargetBranch
+      alwaysPrompt: false
+      variable: init:Topic.TargetBranch
+      prompt: Is this from the alz-modules branch (reusable modules) or the alz-landingzones-infra branch (application stacks)? Type modules or infra. Type unsure if you are not sure.
+      entity: StringPrebuiltEntity
+
+    # Resolve the actual branch name
+    - kind: ConditionGroup
+      id: conditionGroup-resolveBranch
+      conditions:
+        - id: conditionGroup-resolveBranch-item-0
+          condition: =Or(Topic.TargetBranch = "modules", Topic.TargetBranch = "alz-modules")
+          actions:
+            - kind: SetVariable
+              id: setVar_branchModules
+              variable: Topic.ResolvedBranch
+              value: alz-modules
+        - id: conditionGroup-resolveBranch-item-1
+          condition: =Or(Topic.TargetBranch = "infra", Topic.TargetBranch = "alz-landingzones-infra")
+          actions:
+            - kind: SetVariable
+              id: setVar_branchInfra
+              variable: Topic.ResolvedBranch
+              value: alz-landingzones-infra
+        - id: conditionGroup-resolveBranch-item-2
+          condition: =true
+          actions:
+            - kind: SetVariable
+              id: setVar_branchDefault
+              variable: Topic.ResolvedBranch
+              value: alz-landingzones-infra
+
+    - kind: SendActivity
+      id: sendMessage_ReadingFile
+      activity: Reading {Topic.TargetFile} from the {Topic.ResolvedBranch} branch...
+
+    - kind: InvokeFlowAction
+      id: invokeFlow_readFile
+      flowId: ReadGitHubFile
+      input:
+        parameters:
+          filePath: =Topic.TargetFile
+          branch: =Topic.ResolvedBranch
+          targetRepo: =Topic.ResolvedBranch
+      output:
+        binding:
+          fileContent: =Topic.FileContent
+
+    - kind: SetVariable
+      id: setVar_explainPrompt
+      variable: Topic.ExplainPrompt
+      value: '=Concatenate("Explain file ", Topic.TargetFile, " from branch ", Topic.ResolvedBranch, ". Content: ", Topic.FileContent)'
+
+    - kind: GenerativeAnswers
+      id: genAnswers_explainCode
+      userInput: =Topic.ExplainPrompt
+      additionalInstructions: >
+        You are explaining Terraform code to a developer who wants to learn.
+        Cover three things for each block or section:
+        1. WHAT it does — the functional purpose in plain English
+        2. WHY it is structured that way — the design intent, ALZ governance constraint, or Azure requirement driving the choice
+        3. HOW it connects to the bigger picture — how it fits the Azure Landing Zone pattern used in this repo
+        Be specific about Azure concepts. If the user asked a focused question, answer that directly first then offer to expand.
+        No branch creation or PR is needed — respond inline only.
+      variable: Topic.Explanation
+      knowledgeSources:
+        - kind: KnowledgeSourceReference
+          name: Terraform ALZ Knowledge Base
+
+    - kind: SendActivity
+      id: sendMessage_Explanation
+      activity: "{Topic.Explanation}"
+
+    - kind: Question
+      id: question_FollowUp
+      alwaysPrompt: false
+      variable: init:Topic.FollowUp
+      prompt: Would you like me to explain a related file, go deeper into a specific block, or create/modify code based on what you have learned? Type your question or done to finish.
+      entity: StringPrebuiltEntity
+
+    - kind: ConditionGroup
+      id: conditionGroup-followUp
+      conditions:
+        - id: conditionGroup-followUp-item-0
+          condition: =Or(Or(Topic.FollowUp = "done", Topic.FollowUp = "no"), Topic.FollowUp = "nothing")
+          actions:
+            - kind: SendActivity
+              id: sendMessage_Done
+              activity: Great! Feel free to come back anytime to create modules, scaffold apps, or dive deeper into the code.
+        - id: conditionGroup-followUp-item-1
+          condition: =true
+          actions:
+            - kind: SetVariable
+              id: setVar_updateUserInput
+              variable: Topic.TargetFile
+              value: =Topic.FollowUp
+            - kind: GotoAction
+              id: gotoAction_reExplain
+              actionId: invokeFlow_readFile

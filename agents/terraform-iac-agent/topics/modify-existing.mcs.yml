@@ -1,0 +1,189 @@
+# Modify Existing — updates or extends an existing Terraform app or module
+kind: AdaptiveDialog
+beginDialog:
+  kind: OnRecognizedIntent
+  id: main
+  intent:
+    triggerQueries:
+      - update existing
+      - modify existing
+      - add a variable
+      - add a feature
+      - add resource to existing
+      - change an existing
+      - update the module
+      - update the app
+      - extend an existing
+      - I want to change
+      - add new feature to
+      - update terraform code
+      - modify terraform file
+  actions:
+    - kind: SendActivity
+      id: sendMessage_ModifyStart
+      activity: I will help you update existing Terraform code. I will read the current files from the correct branch, apply your change, and open a PR with only the modified files.
+
+    - kind: Question
+      id: question_TargetName
+      alwaysPrompt: false
+      variable: init:Topic.TargetName
+      prompt: Which app or module do you want to modify? (e.g. mvp-app, storage-module, infra-agent, keyvault-module)
+      entity: StringPrebuiltEntity
+      validations:
+        - id: validation_TargetNotEmpty
+          condition: =Length(Topic.TargetName) > 0
+          invalidPrompt: Please specify the app or module name (e.g. mvp-app or storage-module).
+
+    - kind: Question
+      id: question_TargetType
+      alwaysPrompt: false
+      variable: init:Topic.TargetType
+      prompt: Is this an app (on alz-landingzones-infra) or a module (on alz-modules)? Type app or module.
+      entity: StringPrebuiltEntity
+      validations:
+        - id: validation_TargetTypeValue
+          condition: =Or(Topic.TargetType = "app", Topic.TargetType = "module")
+          invalidPrompt: Please type either app or module.
+
+    - kind: Question
+      id: question_ChangeDescription
+      alwaysPrompt: false
+      variable: init:Topic.ChangeDescription
+      prompt: What change do you need? Describe it clearly. For example, add a boolean variable enable_private_endpoint with default false, or add lifecycle management policy support with an optional retention days variable.
+      entity: StringPrebuiltEntity
+
+    # Resolve target branch and path from type
+    - kind: ConditionGroup
+      id: conditionGroup-resolveBranch
+      conditions:
+        - id: conditionGroup-resolveBranch-item-0
+          condition: =Topic.TargetType = "module"
+          actions:
+            - kind: SetVariable
+              id: setVar_branchModule
+              variable: Topic.TargetBranch
+              value: alz-modules
+            - kind: SetVariable
+              id: setVar_pathModule
+              variable: Topic.TargetPath
+              value: =Topic.TargetName
+        - id: conditionGroup-resolveBranch-item-1
+          condition: =true
+          actions:
+            - kind: SetVariable
+              id: setVar_branchApp
+              variable: Topic.TargetBranch
+              value: alz-landingzones-infra
+            - kind: SetVariable
+              id: setVar_pathApp
+              variable: Topic.TargetPath
+              value: '=Concatenate("non-prod/", Topic.TargetName)'
+
+    - kind: SendActivity
+      id: sendMessage_ReadingFiles
+      activity: Reading current files from {Topic.TargetBranch} branch for {Topic.TargetName}...
+
+    - kind: InvokeFlowAction
+      id: invokeFlow_readVariablesTF
+      flowId: ReadGitHubFile
+      input:
+        parameters:
+          filePath: '=Concatenate(Topic.TargetPath, "/variables.tf")'
+          branch: =Topic.TargetBranch
+          targetRepo: =Topic.TargetBranch
+      output:
+        binding:
+          fileContent: =Topic.VariablesTfContent
+          fileSha: =Topic.VariablesTfSha
+
+    - kind: InvokeFlowAction
+      id: invokeFlow_readMainTF
+      flowId: ReadGitHubFile
+      input:
+        parameters:
+          filePath: '=Concatenate(Topic.TargetPath, "/main.tf")'
+          branch: =Topic.TargetBranch
+          targetRepo: =Topic.TargetBranch
+      output:
+        binding:
+          fileContent: =Topic.MainTfContent
+          fileSha: =Topic.MainTfSha
+
+    - kind: InvokeFlowAction
+      id: invokeFlow_applyChange
+      flowId: ApplyAndCommitChange
+      input:
+        parameters:
+          targetName: =Topic.TargetName
+          targetType: =Topic.TargetType
+          changeDescription: =Topic.ChangeDescription
+          variablesTfContent: =Topic.VariablesTfContent
+          mainTfContent: =Topic.MainTfContent
+          targetPath: =Topic.TargetPath
+          branch: =Topic.TargetBranch
+      output:
+        binding:
+          shortDescription: =Topic.ShortDescription
+
+    - kind: SetVariable
+      id: setVar_featureBranch
+      variable: Topic.FeatureBranch
+      value: '=Concatenate("update-", Topic.TargetName, "-", Topic.ShortDescription, "-agent")'
+
+    - kind: InvokeFlowAction
+      id: invokeFlow_getBranchSHA
+      flowId: GetBranchSHA
+      input:
+        parameters:
+          branch: =Topic.TargetBranch
+      output:
+        binding:
+          baseSha: =Topic.BaseSHA
+
+    - kind: InvokeFlowAction
+      id: invokeFlow_createBranch
+      flowId: CreateGitHubBranch
+      input:
+        parameters:
+          newBranch: =Topic.FeatureBranch
+          baseSha: =Topic.BaseSHA
+          targetRepo: =Topic.TargetBranch
+
+    - kind: SetVariable
+      id: setVar_prTitle
+      variable: Topic.PrTitle
+      value: '=Concatenate("fix: update ", Topic.TargetName, " - ", Topic.ChangeDescription, " (agent)")'
+
+    - kind: SetVariable
+      id: setVar_prBody
+      variable: Topic.PrBody
+      value: '=Concatenate("## Summary", Char(10), "- Target: ", Topic.TargetName, " (", Topic.TargetType, ")", Char(10), "- Change: ", Topic.ChangeDescription, Char(10), "- Only modified files committed", Char(10), Char(10), "## Checklist", Char(10), "- terraform validate", Char(10), "- tflint", Char(10), "- checkov -d .", Char(10), "- Tags validated FDD Table 12")'
+
+    - kind: InvokeFlowAction
+      id: invokeFlow_createPR
+      flowId: CreateGitHubPR
+      input:
+        parameters:
+          featureBranch: =Topic.FeatureBranch
+          baseBranch: =Topic.TargetBranch
+          targetRepo: =Topic.TargetBranch
+          prTitle: =Topic.PrTitle
+          prBody: =Topic.PrBody
+      output:
+        binding:
+          prUrl: =Topic.PullRequestUrl
+
+    - kind: SendActivity
+      id: sendMessage_ModifyComplete
+      activity:
+        text:
+          - |
+            Update applied to **{Topic.TargetName}** successfully!
+
+            **Branch:** {Topic.FeatureBranch}
+            **Change:** {Topic.ChangeDescription}
+            **Only modified files committed** — existing files left unchanged.
+
+            **Pull Request:** {Topic.PullRequestUrl}
+
+            Would you like to explain the changed code, generate tests, or make further updates?

@@ -1,0 +1,19 @@
+kind: CopilotStudioAgent
+schemaVersion: "2.0"
+name: Terraform IaC Agent
+description: >
+  Generates, modifies, and explains Azure Terraform IaC code following
+  Azure Landing Zone (ALZ) conventions. Creates feature branches and
+  opens GitHub pull requests on alz-modules and alz-landingzones-infra.
+instructionsFile: instructions.md
+knowledge:
+  - kind: LocalFile
+    file: knowledge/files/knowledge.md
+    displayName: Terraform ALZ Knowledge Base
+topics:
+  - topics/conversation-start.mcs.yml
+  - topics/create-module.mcs.yml
+  - topics/create-app.mcs.yml
+  - topics/modify-existing.mcs.yml
+  - topics/explain-code.mcs.yml
+  - topics/create-tests.mcs.yml

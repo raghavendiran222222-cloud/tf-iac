@@ -1,0 +1,27 @@
+# Conversation Start — fires when a new conversation begins
+kind: AdaptiveDialog
+beginDialog:
+  kind: OnConversationStart
+  id: main
+  actions:
+    - kind: SendActivity
+      id: sendMessage_welcomeMsg
+      activity:
+        text:
+          - |
+            Hello! I'm **{System.Bot.Name}**, your Azure Terraform IaC assistant.
+
+            I can help you with:
+            - **Create Module** — Generate a new reusable Terraform module on the alz-modules branch
+            - **Create App** — Scaffold a full application Terraform stack (non-prod or prod)
+            - **Modify Existing** — Update variables, add resources, or extend an existing app or module
+            - **Create Tests** — Generate plan-level and E2E tests following the storage-module pattern
+            - **Explain Code** — Walk you through any Terraform file in plain English
+
+            What would you like to do today?
+        speak:
+          - >
+            Hello and welcome! I am {System.Bot.Name}, powered by generative AI.
+            I can create Terraform modules, scaffold application infrastructure,
+            modify existing code, generate tests, or explain how any Terraform file works.
+            How can I help you today?

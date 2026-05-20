@@ -1,0 +1,11 @@
+kind: AgentSettings
+schemaVersion: "2.0"
+aiCapabilities:
+  generativeAI: enabled
+  knowledgeSearch: enabled
+  fallbackToGenerativeAnswers: true
+conversationSettings:
+  endOfConversationBehavior: ShowSurvey
+  escalationEnabled: false
+languages:
+  primary: en-US
