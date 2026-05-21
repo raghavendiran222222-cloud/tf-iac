@@ -17,3 +17,7 @@ topics:
   - topics/modify-existing.mcs.yml
   - topics/explain-code.mcs.yml
   - topics/create-tests.mcs.yml
+  - topics/generate-push-module.mcs.yml
+  - topics/generate-push-app.mcs.yml
+  - topics/modify-push.mcs.yml
+  - topics/generate-push-tests.mcs.yml

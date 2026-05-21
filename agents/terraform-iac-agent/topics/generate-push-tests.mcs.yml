@@ -1,0 +1,109 @@
+mcs.metadata:
+  componentName: Generate Push Tests
+kind: AdaptiveDialog
+beginDialog:
+  kind: OnSystemRedirect
+  id: main
+  actions:
+    - kind: SendActivity
+      id: start001
+      activity: |
+        ⚙️ Generating **{Global.TestScope}** test suite for **{Global.TargetName}**...
+
+        Files will be placed under `{Global.TargetPath}/tests/` on `{Global.TargetBranch}`.
+        This may take a moment.
+
+    - kind: SetTextVariable
+      id: buildPrompt
+      variable: init:Topic.GenerationPrompt
+      value: |
+        You are an Azure Terraform IaC test generator. Generate a complete test suite
+        following the storage-module pattern and push it to GitHub.
+
+        TARGET: {Global.TargetName} ({Global.TargetType})
+        RESOURCES: {Global.Resources}
+        TEST SCOPE: {Global.TestScope}
+        TARGET BRANCH: {Global.TargetBranch}
+        TARGET PATH: {Global.TargetPath}/tests/
+        FEATURE BRANCH: tests-{Global.TargetName}-agent
+        REPO for apps: alz-landingzones-infra (owner: bdtmsd)
+        REPO for modules: alz-modules (owner: bdtmsd)
+
+        TEST GENERATION RULES — follow the storage-module test pattern exactly
+
+        PLAN TEST file: test_MODULENAME.py (replace hyphens with underscores in filename)
+        - Import tftest, pytest
+        - TFTEST_AVAILABLE check with pytest.mark.skipif decorator
+        - TerraformTest fixture with -backend=false -lock=false flags
+        - Tests verify: plan runs without error, resource_changes includes expected resources
+
+        E2E TEST file: test_e2e_MODULENAME.py
+        - Import pytest, DefaultAzureCredential, azure-mgmt packages for the resource types
+        - Module-scoped fixture: tf.apply(auto_approve=True) then yield then tf.destroy(auto_approve=True) in finally block
+        - Skip entire test if ARM_SUBSCRIPTION_ID environment variable is not set
+        - After apply: validate real resources exist using azure-mgmt SDK
+        - Validate key properties: name, location, SKU, security settings
+
+        REQUIREMENTS file: requirements.txt
+        Always include: pytest>=7.4.0, tftest>=1.8.7, azure-identity>=1.16.0
+        Add based on resource types in: {Global.Resources}
+          Storage Account → azure-mgmt-storage>=21.0.0
+          Key Vault → azure-mgmt-keyvault>=10.0.0
+          Virtual Network or NSG → azure-mgmt-network>=25.0.0
+          App Service → azure-mgmt-web>=7.0.0
+          MySQL → azure-mgmt-rdbms>=10.0.0
+          Container Apps → azure-mgmt-appcontainers>=2.0.0
+
+        GITHUB WORKFLOW — follow this exact order
+        STEP 1 — Create branch tests-{Global.TargetName}-agent off {Global.TargetBranch} HEAD
+        Announce: "Created branch tests-{Global.TargetName}-agent"
+
+        STEP 2 — Push test files using create_or_update_file (NEVER use push_files)
+        Common params: owner=bdtmsd, repo={Global.TargetBranch}, branch=tests-{Global.TargetName}-agent
+
+        If TestScope is plan or both:
+        Push: {Global.TargetPath}/tests/test_MODULENAME.py
+              message: "test: add plan tests for {Global.TargetName} (agent)"
+              Announce: "Pushed plan test file"
+
+        If TestScope is e2e or both:
+        Push: {Global.TargetPath}/tests/test_e2e_MODULENAME.py
+              message: "test: add e2e tests for {Global.TargetName} (agent)"
+              Announce: "Pushed e2e test file"
+
+        Always push: {Global.TargetPath}/tests/requirements.txt
+              message: "test: add requirements.txt for {Global.TargetName} (agent)"
+              Announce: "Pushed requirements.txt"
+
+        STEP 3 — Create Pull Request
+        Tool: create_pull_request
+        owner: bdtmsd, repo: {Global.TargetBranch}
+        head: tests-{Global.TargetName}-agent
+        base: {Global.TargetBranch}
+        title: test: add {Global.TestScope} tests for {Global.TargetName} (agent)
+        body includes:
+          Summary: Target={Global.TargetName} ({Global.TargetType}), Test scope={Global.TestScope}, Resources={Global.Resources}
+          Files Added: test_MODULENAME.py, test_e2e_MODULENAME.py, requirements.txt under {Global.TargetPath}/tests/
+          How to run: pip install -r tests/requirements.txt then pytest tests/test_MODULENAME.py -v
+          E2E: set ARM_SUBSCRIPTION_ID then pytest tests/test_e2e_MODULENAME.py -v -s
+          Checklist: Plan tests pass locally (-backend=false), E2E tests pass against real Azure subscription
+        Announce: "Pull Request created"
+
+    - kind: AnswerQuestionWithAI
+      id: generate001
+      variable: init:Topic.GenerationResult
+      userInput: =Topic.GenerationPrompt
+
+    - kind: SendActivity
+      id: result001
+      activity: "{Topic.GenerationResult}"
+
+    - kind: SendActivity
+      id: done001
+      activity: |
+        Done! Test suite for **{Global.TargetName}** has been pushed to `{Global.TargetBranch}`.
+
+        Say **"create another test suite"** or **"explain the test code"** to continue.
+
+    - kind: EndDialog
+      id: end001

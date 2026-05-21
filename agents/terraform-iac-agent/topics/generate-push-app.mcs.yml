@@ -1,0 +1,120 @@
+mcs.metadata:
+  componentName: Generate Push App
+kind: AdaptiveDialog
+beginDialog:
+  kind: OnSystemRedirect
+  id: main
+  actions:
+    - kind: SendActivity
+      id: start001
+      activity: |
+        ⚙️ Generating **{Global.Tier}** stack for **{Global.AppName}** ({Global.Environment})...
+
+        Target folder: `{Global.EnvFolder}/{Global.AppName}/` on `alz-landingzones-infra`.
+        I will generate all 10 required files and push them one by one. This may take a moment.
+
+    - kind: SetTextVariable
+      id: buildPrompt
+      variable: init:Topic.GenerationPrompt
+      value: |
+        You are an Azure Terraform IaC code generator. Generate a complete, production-ready
+        application Terraform stack and push it to GitHub following the exact steps below.
+
+        APP NAME: {Global.AppName}
+        ENVIRONMENT: {Global.Environment}
+        TIER: {Global.Tier}
+        RESOURCES: {Global.Resources}
+        SPECIAL CONFIG: {Global.SpecialConfig}
+        TARGET REPO: alz-landingzones-infra (owner: bdtmsd)
+        TARGET FOLDER: {Global.EnvFolder}/{Global.AppName}/
+        FEATURE BRANCH: feat/{Global.AppName}-{Global.Environment}-agent
+
+        GENERATION RULES
+        - Use Azure Verified Modules (AVM) with exact version pins from the knowledge base
+        - Apply BDT tagging schema: Application, DevOwner, BusinessOwner, Environment, DataClassification, BusinessCriticality, IACRepository, ManagedBy=Terraform, CreationDate
+        - Naming pattern: PREFIX-bdt-APP-ENV-REGION-001 (e.g. asp-bdt-payments-api-dev-eus2-001)
+        - Providers: azurerm ~> 4.71, azapi ~> 2.9, Terraform >= 1.9 less than 2.0
+        - Backend: HCP Terraform Cloud, org=bdtmsd, workspace=alz-landingzones-{Global.AppName}, tags=["{Global.Tier}"]
+        - Custom modules from: git::https://github.com/bdtmsd/alz-modules.git//MODULE-NAME?ref=MODULE-NAME-vX.Y.Z
+        - All HCL: 2-space indentation, = signs aligned per block
+        - Security: Key Vault purge_protection_enabled=true, public_network_access_enabled=false; Storage public_network_access_enabled=false, min_tls_version=TLS1_2; App Service https_only=true; NSG never allow source=* on ports 22 or 3389
+        - Never hardcode secrets — use TF_VAR_ environment variables or HCP Vault Secrets data sources
+        - Generate each file completely — no placeholders, no TODO comments
+
+        GITHUB WORKFLOW — follow this exact order
+        STEP 1 — Create branch feat/{Global.AppName}-{Global.Environment}-agent off alz-landingzones-infra HEAD
+        Announce: "Created branch feat/{Global.AppName}-{Global.Environment}-agent"
+
+        STEP 2 — Push 10 files using create_or_update_file one at a time (NEVER use push_files)
+        Common params: owner=bdtmsd, repo=alz-landingzones-infra, branch=feat/{Global.AppName}-{Global.Environment}-agent
+
+        File 1 of 10 — path: {Global.EnvFolder}/{Global.AppName}/versions.tf
+                   message: "feat: add versions.tf for {Global.AppName} ({Global.EnvFolder})"
+                   Announce: "Pushed versions.tf (1 of 10)"
+
+        File 2 of 10 — path: {Global.EnvFolder}/{Global.AppName}/backend.tf
+                   message: "feat: add backend.tf for {Global.AppName} ({Global.EnvFolder})"
+                   Announce: "Pushed backend.tf (2 of 10)"
+
+        File 3 of 10 — path: {Global.EnvFolder}/{Global.AppName}/provider.tf
+                   message: "feat: add provider.tf for {Global.AppName} ({Global.EnvFolder})"
+                   Announce: "Pushed provider.tf (3 of 10)"
+
+        File 4 of 10 — path: {Global.EnvFolder}/{Global.AppName}/variables.tf
+                   message: "feat: add variables.tf for {Global.AppName} ({Global.EnvFolder})"
+                   Announce: "Pushed variables.tf (4 of 10)"
+
+        File 5 of 10 — path: {Global.EnvFolder}/{Global.AppName}/locals.tf
+                   message: "feat: add locals.tf for {Global.AppName} ({Global.EnvFolder})"
+                   Announce: "Pushed locals.tf (5 of 10)"
+
+        File 6 of 10 — path: {Global.EnvFolder}/{Global.AppName}/main.tf
+                   message: "feat: add main.tf for {Global.AppName} ({Global.EnvFolder})"
+                   Announce: "Pushed main.tf (6 of 10)"
+
+        File 7 of 10 — path: {Global.EnvFolder}/{Global.AppName}/outputs.tf
+                   message: "feat: add outputs.tf for {Global.AppName} ({Global.EnvFolder})"
+                   Announce: "Pushed outputs.tf (7 of 10)"
+
+        File 8 of 10 — path: {Global.EnvFolder}/{Global.AppName}/terraform.tfvars.example
+                   message: "feat: add terraform.tfvars.example for {Global.AppName} ({Global.EnvFolder})"
+                   Announce: "Pushed terraform.tfvars.example (8 of 10)"
+
+        File 9 of 10 — path: {Global.EnvFolder}/{Global.AppName}/README.md
+                   message: "feat: add README.md for {Global.AppName} ({Global.EnvFolder})"
+                   Announce: "Pushed README.md (9 of 10)"
+
+        File 10 of 10 — path: {Global.EnvFolder}/{Global.AppName}/CHANGELOG.md
+                   message: "feat: add CHANGELOG.md for {Global.AppName} ({Global.EnvFolder})"
+                   Announce: "Pushed CHANGELOG.md (10 of 10)"
+
+        STEP 3 — Create Pull Request
+        Tool: create_pull_request
+        owner: bdtmsd, repo: alz-landingzones-infra
+        head: feat/{Global.AppName}-{Global.Environment}-agent
+        base: alz-landingzones-infra
+        title: feat: add {Global.Environment} {Global.AppName} infrastructure (agent)
+        body includes:
+          Summary: Application={Global.AppName}, Environment={Global.Environment} ({Global.Tier}), Folder={Global.EnvFolder}/{Global.AppName}/, Resources={Global.Resources}
+          Files Added: all 10 files listed above
+          Checklist: terraform validate, tflint, checkov -d ., Cost estimate reviewed, Tags validated FDD Table 12, HCP Terraform workspace alz-landingzones-{Global.AppName} created
+        Announce: "Pull Request created"
+
+    - kind: AnswerQuestionWithAI
+      id: generate001
+      variable: init:Topic.GenerationResult
+      userInput: =Topic.GenerationPrompt
+
+    - kind: SendActivity
+      id: result001
+      activity: "{Topic.GenerationResult}"
+
+    - kind: SendActivity
+      id: done001
+      activity: |
+        Done! **{Global.AppName}** ({Global.Environment}) has been scaffolded and pushed to GitHub.
+
+        Say **"create another app"** to build another, or **"create tests"** to add a test suite.
+
+    - kind: EndDialog
+      id: end001

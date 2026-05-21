@@ -7,3 +7,17 @@ connectionReferences:
     description: >
       GitHub connection used by all topics that create branches, commit files,
       and open pull requests on alz-modules and alz-landingzones-infra repos.
+
+  - name: AzureMcpConnection
+    displayName: Azure MCP Server (terraform-iac-agent)
+    connectorId: /providers/Microsoft.PowerApps/apis/shared_mcp
+    mcpServerUrl: https://ca-bdt-azure-mcp-server-dev-eus2-001.<region>.azurecontainerapps.io
+    description: >
+      MCP server deployed on Azure Container Apps. Exposes Azure resource tools
+      to the agent over the Model Context Protocol with Entra ID auth.
+    authentication:
+      type: OAuthGeneric
+      authorizationUrl: https://login.microsoftonline.com/<tenant-id>/oauth2/v2.0/authorize
+      tokenUrl: https://login.microsoftonline.com/<tenant-id>/oauth2/v2.0/token
+      clientId: <entra-client-id>
+      scopes: api://<entra-client-id>/.default

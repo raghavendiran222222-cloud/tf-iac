@@ -1,9 +1,11 @@
-# Explain Code — learning topic that reads and explains Terraform files in plain English
+mcs.metadata:
+  componentName: Explain Code
 kind: AdaptiveDialog
 beginDialog:
   kind: OnRecognizedIntent
   id: main
   intent:
+    displayName: ExplainCode
     triggerQueries:
       - explain
       - what does
@@ -24,95 +26,54 @@ beginDialog:
       - what is this terraform doing
   actions:
     - kind: SendActivity
-      id: sendMessage_ExplainStart
-      activity: Happy to explain! I will read the relevant file from the repository and walk you through it in plain English.
+      id: start001
+      activity: Happy to explain! Tell me what you want to understand and I will walk you through it in plain English.
 
     - kind: Question
       id: question_TargetFile
       alwaysPrompt: false
       variable: init:Topic.TargetFile
-      prompt: "Which file or concept would you like explained? Examples: storage-module/locals.tf, mvp-app/backend.tf, mvp-app/main.tf, mvp-app/variables.tf, storage-module/outputs.tf, or type naming convention."
+      prompt: "Which file, concept, or pattern would you like explained? Examples: storage-module/locals.tf, mvp-app/backend.tf, the naming convention, the tag governance rules, or how HCP Terraform backend works."
       entity: StringPrebuiltEntity
 
-    - kind: Question
-      id: question_TargetBranch
-      alwaysPrompt: false
-      variable: init:Topic.TargetBranch
-      prompt: Is this from the alz-modules branch (reusable modules) or the alz-landingzones-infra branch (application stacks)? Type modules or infra. Type unsure if you are not sure.
-      entity: StringPrebuiltEntity
+    - kind: SetTextVariable
+      id: buildPrompt
+      variable: init:Topic.ExplainPrompt
+      value: |
+        You are an Azure Terraform IaC expert explaining code to a developer who wants to learn.
 
-    # Resolve the actual branch name
-    - kind: ConditionGroup
-      id: conditionGroup-resolveBranch
-      conditions:
-        - id: conditionGroup-resolveBranch-item-0
-          condition: =Or(Topic.TargetBranch = "modules", Topic.TargetBranch = "alz-modules")
-          actions:
-            - kind: SetVariable
-              id: setVar_branchModules
-              variable: Topic.ResolvedBranch
-              value: alz-modules
-        - id: conditionGroup-resolveBranch-item-1
-          condition: =Or(Topic.TargetBranch = "infra", Topic.TargetBranch = "alz-landingzones-infra")
-          actions:
-            - kind: SetVariable
-              id: setVar_branchInfra
-              variable: Topic.ResolvedBranch
-              value: alz-landingzones-infra
-        - id: conditionGroup-resolveBranch-item-2
-          condition: =true
-          actions:
-            - kind: SetVariable
-              id: setVar_branchDefault
-              variable: Topic.ResolvedBranch
-              value: alz-landingzones-infra
+        The user wants to understand: {Topic.TargetFile}
 
-    - kind: SendActivity
-      id: sendMessage_ReadingFile
-      activity: Reading {Topic.TargetFile} from the {Topic.ResolvedBranch} branch...
+        Using the Terraform ALZ knowledge base, explain this concept or file in plain English.
+        Cover:
+        1. WHAT it does — the functional purpose
+        2. WHY it is structured that way — the design intent, ALZ governance constraint, or Azure requirement
+        3. HOW it connects to the bigger picture — how it fits the Azure Landing Zone pattern
 
-    - kind: InvokeFlowAction
-      id: invokeFlow_readFile
-      flowId: ReadGitHubFile
-      input:
-        parameters:
-          filePath: =Topic.TargetFile
-          branch: =Topic.ResolvedBranch
-          targetRepo: =Topic.ResolvedBranch
-      output:
-        binding:
-          fileContent: =Topic.FileContent
+        Key conventions to reference where relevant:
+        - Naming: {{resource-type}}-bdt-{{app}}-{{env}}-{{region-abbr}}-001
+        - Tags: Application, DevOwner, BusinessOwner, Environment, DataClassification, BusinessCriticality, IACRepository
+        - Backend: HCP Terraform Cloud, org bdtmsd
+        - Providers: azurerm ~> 4.71, azapi ~> 2.9
+        - Repo: alz-landingzones-infra (apps), alz-modules (modules)
 
-    - kind: SetVariable
-      id: setVar_explainPrompt
-      variable: Topic.ExplainPrompt
-      value: '=Concatenate("Explain file ", Topic.TargetFile, " from branch ", Topic.ResolvedBranch, ". Content: ", Topic.FileContent)'
+        Be specific about Azure concepts. Answer the question directly first, then offer to expand.
+        No branch or PR needed — respond inline only.
 
-    - kind: GenerativeAnswers
-      id: genAnswers_explainCode
+    - kind: AnswerQuestionWithAI
+      id: generate001
+      variable: init:Topic.Explanation
       userInput: =Topic.ExplainPrompt
-      additionalInstructions: >
-        You are explaining Terraform code to a developer who wants to learn.
-        Cover three things for each block or section:
-        1. WHAT it does — the functional purpose in plain English
-        2. WHY it is structured that way — the design intent, ALZ governance constraint, or Azure requirement driving the choice
-        3. HOW it connects to the bigger picture — how it fits the Azure Landing Zone pattern used in this repo
-        Be specific about Azure concepts. If the user asked a focused question, answer that directly first then offer to expand.
-        No branch creation or PR is needed — respond inline only.
-      variable: Topic.Explanation
-      knowledgeSources:
-        - kind: KnowledgeSourceReference
-          name: Terraform ALZ Knowledge Base
 
     - kind: SendActivity
-      id: sendMessage_Explanation
+      id: result001
       activity: "{Topic.Explanation}"
 
     - kind: Question
       id: question_FollowUp
       alwaysPrompt: false
       variable: init:Topic.FollowUp
-      prompt: Would you like me to explain a related file, go deeper into a specific block, or create/modify code based on what you have learned? Type your question or done to finish.
+      prompt: Would you like me to explain a related concept, go deeper into a specific block, or create/modify code? Type your question or done to finish.
       entity: StringPrebuiltEntity
 
     - kind: ConditionGroup
@@ -127,10 +88,13 @@ beginDialog:
         - id: conditionGroup-followUp-item-1
           condition: =true
           actions:
-            - kind: SetVariable
-              id: setVar_updateUserInput
+            - kind: SetTextVariable
+              id: setVar_updateQuery
               variable: Topic.TargetFile
-              value: =Topic.FollowUp
+              value: "{Topic.FollowUp}"
             - kind: GotoAction
               id: gotoAction_reExplain
-              actionId: invokeFlow_readFile
+              actionId: buildPrompt
+
+    - kind: EndDialog
+      id: end001

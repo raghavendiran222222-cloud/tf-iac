@@ -1,0 +1,85 @@
+mcs.metadata:
+  componentName: Modify Push
+kind: AdaptiveDialog
+beginDialog:
+  kind: OnSystemRedirect
+  id: main
+  actions:
+    - kind: SendActivity
+      id: start001
+      activity: |
+        ⚙️ Reading and updating **{Global.TargetName}** on `{Global.TargetBranch}`...
+
+        I will read the current files, apply your change, and open a PR with only the modified files.
+
+    - kind: SetTextVariable
+      id: buildPrompt
+      variable: init:Topic.GenerationPrompt
+      value: |
+        You are an Azure Terraform IaC code modifier. Read the existing Terraform files,
+        apply the requested change, and push only the modified files to GitHub.
+
+        TARGET: {Global.TargetName} ({Global.TargetType})
+        CHANGE: {Global.ChangeDescription}
+        TARGET BRANCH: {Global.TargetBranch}
+        TARGET PATH: {Global.TargetPath}/
+        FEATURE BRANCH: update-{Global.TargetName}-agent
+        REPO for apps: alz-landingzones-infra (owner: bdtmsd)
+        REPO for modules: alz-modules (owner: bdtmsd)
+
+        MODIFICATION RULES
+        - Read ONLY the files that need to change (use get_file_contents)
+        - Preserve all existing content not related to the change
+        - Apply the change following ALZ naming and tag conventions
+        - Naming pattern: PREFIX-bdt-APP-ENV-REGION-001
+        - Tags: Application, DevOwner, BusinessOwner, Environment, DataClassification, BusinessCriticality, IACRepository, ManagedBy=Terraform, CreationDate
+        - Security hardening: purge_protection, TLS1_2, https_only, no wildcard NSG rules
+        - Never hardcode secrets
+        - Commit ONLY modified files — do not re-commit unchanged files
+        - All HCL: 2-space indentation, = signs aligned per block
+
+        GITHUB WORKFLOW — follow this exact order
+        STEP 1 — Read current files
+        Use get_file_contents to read each file that needs modification.
+        Read at minimum: {Global.TargetPath}/variables.tf and {Global.TargetPath}/main.tf
+        Announce: "Read current files from {Global.TargetBranch}"
+
+        STEP 2 — Create feature branch update-{Global.TargetName}-agent off {Global.TargetBranch} HEAD
+        Announce: "Created branch update-{Global.TargetName}-agent"
+
+        STEP 3 — Push ONLY the modified files using create_or_update_file
+        For each modified file:
+          owner=bdtmsd, repo={Global.TargetBranch}, branch=update-{Global.TargetName}-agent
+          message: "fix: update {Global.TargetName} - {Global.ChangeDescription} (agent)"
+          Pass the existing file SHA in the sha parameter to update (not create) the file
+          Announce: "Pushed FILENAME" for each file
+
+        STEP 4 — Create Pull Request
+        Tool: create_pull_request
+        owner: bdtmsd, repo: {Global.TargetBranch}
+        head: update-{Global.TargetName}-agent
+        base: {Global.TargetBranch}
+        title: fix: update {Global.TargetName} - {Global.ChangeDescription} (agent)
+        body includes:
+          Summary: Target={Global.TargetName} ({Global.TargetType}), Change={Global.ChangeDescription}, Only modified files committed
+          Checklist: terraform validate, tflint, checkov -d ., Tags validated FDD Table 12
+        Announce: "Pull Request created"
+
+    - kind: AnswerQuestionWithAI
+      id: generate001
+      variable: init:Topic.GenerationResult
+      userInput: =Topic.GenerationPrompt
+
+    - kind: SendActivity
+      id: result001
+      activity: "{Topic.GenerationResult}"
+
+    - kind: SendActivity
+      id: done001
+      activity: |
+        Done! **{Global.TargetName}** has been updated and a PR opened on `{Global.TargetBranch}`.
+
+        Say **"explain the changed code"**, **"create tests"**, or **"make another update"** to continue.
+
+    - kind: EndDialog
+      id: end001

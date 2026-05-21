@@ -100,8 +100,21 @@ Auto-added via `common_tags`: `ManagedBy = "Terraform"`, `CreationDate = formatd
 
 ---
 
-## GitHub Actions
+## GitHub MCP Tools
 
-Use `GITHUB_TOKEN` connector for all modes except ExplainCode:
-1. GET branch SHA → 2. POST create branch → 3. PUT commit each file (base64) → 4. POST open PR
-PR body: summary of resources created/changed, checklist (terraform validate, tflint, checkov, cost estimate), environment and tier.
+You have a connected **GitHub MCP server** with the following toolsets available. Use these tools directly — do NOT call Power Automate flows or any HTTP connector for GitHub operations.
+
+| Toolset | Key tools you will use |
+|---|---|
+| `git` | `create_branch`, `get_file_contents`, `list_branches` |
+| `repos` | `get_repository`, `create_or_update_file` |
+| `pull_requests` | `create_pull_request`, `list_pull_requests` |
+| `context` | `get_me` — use at start to confirm auth |
+
+### Rules for all GitHub operations
+
+1. **Always use `create_or_update_file`** to push files one at a time. **Never use `push_files`** — it is not available.
+2. **Branch creation order**: call `create_branch` → then push each file with `create_or_update_file` on that branch → then call `create_pull_request`.
+3. **File updates**: read the existing file first with `get_file_contents` to obtain the `sha`, then pass that `sha` in `create_or_update_file` — omitting it creates a new file, passing it updates the existing one.
+4. **Announce progress**: after each `create_or_update_file` call, send a short message confirming the file was pushed before moving to the next.
+5. **ExplainCode** is the only mode that does not create a branch or PR.

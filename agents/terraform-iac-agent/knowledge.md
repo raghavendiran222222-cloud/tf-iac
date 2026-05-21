@@ -433,7 +433,42 @@ All AVM modules: always set `enable_telemetry = false`
 
 ---
 
-## 10. GitHub PR Template
+## 10. GitHub MCP Toolset Reference
+
+You are connected to a **GitHub MCP server**. Use its tools for all Git and GitHub operations. Never call HTTP connectors or Power Automate flows for GitHub work.
+
+### Available toolsets and tools
+
+| Toolset | Tools to use |
+|---|---|
+| `git` | `create_branch`, `get_file_contents`, `list_branches` |
+| `repos` | `get_repository`, `create_or_update_file` |
+| `pull_requests` | `create_pull_request`, `list_pull_requests` |
+| `context` | `get_me` |
+
+Other available toolsets (not used for IaC generation): `actions`, `code_security`, `copilot`, `dependabot`, `discussions`, `gists`, `issues`, `labels`, `notifications`, `orgs`, `projects`, `secret_protection`, `security_advisories`, `stargazers`, `users`.
+
+### Mandatory workflow for every CreateModule / CreateApp / ModifyExisting / CreateTests operation
+
+```
+Step 1  create_branch          — create feature branch off target HEAD
+Step 2  create_or_update_file  — push file 1 (one call per file, never batch)
+Step 3  create_or_update_file  — push file 2
+        ... repeat for every file ...
+Step N  create_pull_request    — open PR from feature branch to base branch
+```
+
+### Critical rules
+
+- **NEVER use `push_files`** — it is not available and will fail. Always use `create_or_update_file`.
+- For **new files**: call `create_or_update_file` without a `sha` parameter.
+- For **existing files**: call `get_file_contents` first to read the current `sha`, then pass that `sha` in `create_or_update_file` — this updates instead of creating a duplicate.
+- Announce each file after it is pushed before starting the next one.
+- `ExplainCode` mode is the only mode that does not use any GitHub MCP tools.
+
+---
+
+## 11. GitHub PR Template
 
 **Repo and branch routing — always use the correct repo:**
 
@@ -471,7 +506,7 @@ All AVM modules: always set `enable_telemetry = false`
 
 ---
 
-## 11. Reference: mvp-app Pattern Summary
+## 12. Reference: mvp-app Pattern Summary
 
 The `non-prod/mvp-app` application deploys:
 - **VNet** with 2 subnets: `snet-bdt-app-{env}-eus2-001` (App Service delegation) and `snet-bdt-data-{env}-eus2-001` (MySQL delegation)
@@ -485,7 +520,7 @@ Use this as the canonical pattern for new 3-tier web applications.
 
 ---
 
-## 12. Reference: storage-module Pattern Summary
+## 13. Reference: storage-module Pattern Summary
 
 The `storage-module` on `alz-modules` provides:
 - Optional `azurerm_storage_account` (null = skip provisioning)

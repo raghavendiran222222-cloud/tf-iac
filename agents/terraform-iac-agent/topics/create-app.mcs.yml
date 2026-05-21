@@ -1,9 +1,11 @@
-# Create App — scaffolds a full Terraform application stack on alz-landingzones-infra
+mcs.metadata:
+  componentName: Collect App
 kind: AdaptiveDialog
 beginDialog:
   kind: OnRecognizedIntent
   id: main
   intent:
+    displayName: CollectApp
     triggerQueries:
       - create app
       - new application
@@ -19,7 +21,7 @@ beginDialog:
       - add a new workload
   actions:
     - kind: SendActivity
-      id: sendMessage_createAppStart
+      id: start001
       activity: Let us scaffold a complete Terraform application stack on the alz-landingzones-infra branch.
 
     - kind: Question
@@ -50,106 +52,61 @@ beginDialog:
       prompt: Any special configuration such as VNet CIDR range, App Service SKU, MySQL SKU, or enable resource locks? Type defaults to use standard values.
       entity: StringPrebuiltEntity
 
-    # Determine tier from environment value
+    # Determine tier and env folder
     - kind: ConditionGroup
       id: conditionGroup-determineTier
       conditions:
         - id: conditionGroup-determineTier-item-0
           condition: =Or(Or(Or(Or(Or(Or(Or(Topic.Environment = "sandbox", Topic.Environment = "dev"), Topic.Environment = "test"), Topic.Environment = "stage"), Topic.Environment = "qa"), Topic.Environment = "uat"), Topic.Environment = "sit"), Topic.Environment = "nonprod")
           actions:
-            - kind: SetVariable
+            - kind: SetTextVariable
               id: setVar_tierNonProd
-              variable: Topic.Tier
+              variable: Global.Tier
+              value: non-prod
+            - kind: SetTextVariable
+              id: setVar_envFolderNonProd
+              variable: Global.EnvFolder
               value: non-prod
         - id: conditionGroup-determineTier-item-1
           condition: =true
           actions:
-            - kind: SetVariable
+            - kind: SetTextVariable
               id: setVar_tierProd
-              variable: Topic.Tier
+              variable: Global.Tier
               value: prod
+            - kind: SetTextVariable
+              id: setVar_envFolderProd
+              variable: Global.EnvFolder
+              value: prod
+
+    - kind: SetTextVariable
+      id: setGlobal_appName
+      variable: Global.AppName
+      value: "{Topic.AppName}"
+
+    - kind: SetTextVariable
+      id: setGlobal_environment
+      variable: Global.Environment
+      value: "{Topic.Environment}"
+
+    - kind: SetTextVariable
+      id: setGlobal_resources
+      variable: Global.Resources
+      value: "{Topic.Resources}"
+
+    - kind: SetTextVariable
+      id: setGlobal_specialConfig
+      variable: Global.SpecialConfig
+      value: "{Topic.SpecialConfig}"
 
     - kind: SendActivity
       id: sendMessage_generating
-      activity: Generating {Topic.Tier} stack for **{Topic.AppName}** ({Topic.Environment} environment). Folder will be {Topic.Tier}/{Topic.AppName}/ with all 10 required files.
+      activity: |
+        ⚙️ Generating **{Global.Tier}** stack for **{Global.AppName}** ({Global.Environment} environment)...
 
-    - kind: SetVariable
-      id: setVar_featureBranch
-      variable: Topic.FeatureBranch
-      value: '=Concatenate(Topic.AppName, "-", Topic.Environment, "-agent")'
+        Target folder: `{Global.EnvFolder}/{Global.AppName}/` on `alz-landingzones-infra`.
+        I will generate all 10 required files and push them to GitHub. This may take a moment.
 
-    - kind: InvokeFlowAction
-      id: invokeFlow_getBranchSHA
-      flowId: GetBranchSHA
-      input:
-        parameters:
-          branch: alz-landingzones-infra
-      output:
-        binding:
-          baseSha: =Topic.BaseSHA
-
-    - kind: InvokeFlowAction
-      id: invokeFlow_createBranch
-      flowId: CreateGitHubBranch
-      input:
-        parameters:
-          newBranch: =Topic.FeatureBranch
-          baseSha: =Topic.BaseSHA
-          targetRepo: alz-landingzones-infra
-
-    - kind: InvokeFlowAction
-      id: invokeFlow_generateAndCommitApp
-      flowId: GenerateAndCommitAppFiles
-      input:
-        parameters:
-          appName: =Topic.AppName
-          environment: =Topic.Environment
-          tier: =Topic.Tier
-          resources: =Topic.Resources
-          specialConfig: =Topic.SpecialConfig
-          branch: =Topic.FeatureBranch
-          targetRepo: alz-landingzones-infra
-
-    - kind: SetVariable
-      id: setVar_prTitle
-      variable: Topic.PrTitle
-      value: '=Concatenate("feat: add ", Topic.Environment, " ", Topic.AppName, " infrastructure (agent)")'
-
-    - kind: SetVariable
-      id: setVar_prBody
-      variable: Topic.PrBody
-      value: '=Concatenate("## Summary", Char(10), "- Application: ", Topic.AppName, Char(10), "- Environment: ", Topic.Environment, " (", Topic.Tier, ")", Char(10), "- Folder: ", Topic.Tier, "/", Topic.AppName, "/", Char(10), "- Resources: ", Topic.Resources, Char(10), Char(10), "## Checklist", Char(10), "- terraform validate", Char(10), "- tflint", Char(10), "- checkov -d .", Char(10), "- Cost estimate reviewed", Char(10), "- Tags validated FDD Table 12", Char(10), Char(10), "## Environment", Char(10), Topic.Environment, " | ", Topic.Tier)'
-
-    - kind: InvokeFlowAction
-      id: invokeFlow_createPR
-      flowId: CreateGitHubPR
-      input:
-        parameters:
-          featureBranch: =Topic.FeatureBranch
-          baseBranch: alz-landingzones-infra
-          targetRepo: alz-landingzones-infra
-          prTitle: =Topic.PrTitle
-          prBody: =Topic.PrBody
-      output:
-        binding:
-          prUrl: =Topic.PullRequestUrl
-
-    - kind: SendActivity
-      id: sendMessage_prCreated
-      activity:
-        text:
-          - |
-            Application **{Topic.AppName}** scaffolded successfully!
-
-            **Location:** {Topic.Tier}/{Topic.AppName}/
-            **Branch:** {Topic.FeatureBranch}
-            **Environment:** {Topic.Environment}
-
-            **Files generated:**
-            - main.tf, variables.tf, outputs.tf, locals.tf
-            - versions.tf, backend.tf, provider.tf
-            - terraform.tfvars.example, README.md, CHANGELOG.md
-
-            **Pull Request:** {Topic.PullRequestUrl}
-
-            Would you like me to generate tests for this application as well?
+    - kind: BeginDialog
+      id: redirectToGenerator
+      dialog: generate-push-app

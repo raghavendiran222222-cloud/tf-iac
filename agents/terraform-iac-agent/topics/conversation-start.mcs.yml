@@ -1,4 +1,5 @@
-# Conversation Start — fires when a new conversation begins
+mcs.metadata:
+  componentName: Conversation Start
 kind: AdaptiveDialog
 beginDialog:
   kind: OnConversationStart
@@ -16,7 +17,7 @@ beginDialog:
             - **Create App** — Scaffold a full application Terraform stack (non-prod or prod)
             - **Modify Existing** — Update variables, add resources, or extend an existing app or module
             - **Create Tests** — Generate plan-level and E2E tests following the storage-module pattern
-            - **Explain Code** — Walk you through any Terraform file in plain English
+            - **Explain Code** — Walk you through any Terraform file or concept in plain English
 
             What would you like to do today?
         speak:

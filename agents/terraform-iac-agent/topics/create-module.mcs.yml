@@ -1,9 +1,11 @@
-# Create Module — generates a new reusable Terraform module on the alz-modules branch
+mcs.metadata:
+  componentName: Collect Module
 kind: AdaptiveDialog
 beginDialog:
   kind: OnRecognizedIntent
   id: main
   intent:
+    displayName: CollectModule
     triggerQueries:
       - create module
       - new module
@@ -16,7 +18,7 @@ beginDialog:
       - add a module to alz-modules
   actions:
     - kind: SendActivity
-      id: sendMessage_createModuleStart
+      id: start001
       activity: Great! I will help you create a new reusable Terraform module on the alz-modules branch.
 
     - kind: Question
@@ -40,86 +42,29 @@ beginDialog:
       prompt: Any optional features to include? (e.g. private endpoints, diagnostic settings, lifecycle policies, soft delete, resource locks). Type none to skip.
       entity: StringPrebuiltEntity
 
+    - kind: SetTextVariable
+      id: setGlobal_moduleName
+      variable: Global.ModuleName
+      value: "{Topic.ModuleName}"
+
+    - kind: SetTextVariable
+      id: setGlobal_resourceTypes
+      variable: Global.ResourceTypes
+      value: "{Topic.ResourceTypes}"
+
+    - kind: SetTextVariable
+      id: setGlobal_optionalFeatures
+      variable: Global.OptionalFeatures
+      value: "{Topic.OptionalFeatures}"
+
     - kind: SendActivity
       id: sendMessage_generating
-      activity: Generating module files for {Topic.ModuleName}. This includes main.tf, variables.tf, outputs.tf, locals.tf, versions.tf, CHANGELOG.md, README.md, and examples/basic/main.tf.
+      activity: |
+        ⚙️ Generating your **{Global.ModuleName}** Terraform module...
 
-    - kind: SetVariable
-      id: setVar_featureBranch
-      variable: Topic.FeatureBranch
-      value: '=Concatenate(Topic.ModuleName, "-agent")'
+        Target folder: `{Global.ModuleName}/` on the `alz-modules` branch.
+        I will generate all required files and push them to GitHub. This may take a moment.
 
-    - kind: InvokeFlowAction
-      id: invokeFlow_getBranchSHA
-      flowId: GetBranchSHA
-      input:
-        parameters:
-          branch: alz-modules
-      output:
-        binding:
-          baseSha: =Topic.BaseSHA
-
-    - kind: InvokeFlowAction
-      id: invokeFlow_createBranch
-      flowId: CreateGitHubBranch
-      input:
-        parameters:
-          newBranch: =Topic.FeatureBranch
-          baseSha: =Topic.BaseSHA
-          targetRepo: alz-modules
-
-    - kind: InvokeFlowAction
-      id: invokeFlow_generateAndCommitModule
-      flowId: GenerateAndCommitModuleFiles
-      input:
-        parameters:
-          moduleName: =Topic.ModuleName
-          resourceTypes: =Topic.ResourceTypes
-          optionalFeatures: =Topic.OptionalFeatures
-          branch: =Topic.FeatureBranch
-          targetRepo: alz-modules
-
-    - kind: SetVariable
-      id: setVar_prTitle
-      variable: Topic.PrTitle
-      value: '=Concatenate("feat: add ", Topic.ModuleName, " module (agent)")'
-
-    - kind: SetVariable
-      id: setVar_prBody
-      variable: Topic.PrBody
-      value: '=Concatenate("## Summary", Char(10), "- Module: ", Topic.ModuleName, Char(10), "- Resources: ", Topic.ResourceTypes, Char(10), "- Features: ", Topic.OptionalFeatures, Char(10), Char(10), "## Checklist", Char(10), "- terraform validate", Char(10), "- tflint", Char(10), "- checkov -d .", Char(10), "- Tags validated FDD Table 12")'
-
-    - kind: InvokeFlowAction
-      id: invokeFlow_createPR
-      flowId: CreateGitHubPR
-      input:
-        parameters:
-          featureBranch: =Topic.FeatureBranch
-          baseBranch: alz-modules
-          targetRepo: alz-modules
-          prTitle: =Topic.PrTitle
-          prBody: =Topic.PrBody
-      output:
-        binding:
-          prUrl: =Topic.PullRequestUrl
-
-    - kind: SendActivity
-      id: sendMessage_prCreated
-      activity:
-        text:
-          - |
-            Module **{Topic.ModuleName}** created on branch **{Topic.FeatureBranch}**.
-
-            **Files generated:**
-            - {Topic.ModuleName}/main.tf
-            - {Topic.ModuleName}/variables.tf
-            - {Topic.ModuleName}/outputs.tf
-            - {Topic.ModuleName}/locals.tf
-            - {Topic.ModuleName}/versions.tf
-            - {Topic.ModuleName}/CHANGELOG.md
-            - {Topic.ModuleName}/README.md
-            - {Topic.ModuleName}/examples/basic/main.tf
-
-            **Pull Request:** {Topic.PullRequestUrl}
-
-            Would you like me to generate tests for this module or explain any generated file?
+    - kind: BeginDialog
+      id: redirectToGenerator
+      dialog: generate-push-module

@@ -137,3 +137,35 @@ HCP Terraform Cloud instead of a local backend or Azure Blob backend.
 - Explains HCP Terraform Cloud remote state: workspace, organization, tags
 - Explains the trade-offs vs azurerm backend (state locking, UI, run history)
 - No branch or PR created
+
+---
+
+## MCP Server on Azure Container Apps (internet-facing with auth)
+
+### Prompt 11 — Deploy Azure MCP server as a Container App
+
+```
+Create a dev landing zone for an Azure MCP server application called azure-mcp-server.
+Deploy it as a Container App using the image ghcr.io/azure/azure-mcp:0.3.1.
+The Container App must be internet-facing on port 3000 and protected by
+Entra ID Easy Auth (Microsoft identity platform). Use a Key Vault to store
+the Entra ID client secret. Add Log Analytics for diagnostics.
+Place the stack under non-prod/azure-mcp-server/ on alz-landingzones-infra.
+```
+
+**Expected behavior:**
+- Creates branch `feat/azure-mcp-server-dev-agent` off `alz-landingzones-infra`
+- Generates `non-prod/azure-mcp-server/` with all 10 files
+- **Container Apps Environment** (`Azure/avm-res-app-managedenvironment/azurerm`): linked to Log Analytics workspace
+- **Container App** (`Azure/avm-res-app-containerapp/azurerm`):
+  - Image: `ghcr.io/azure/azure-mcp:0.3.1`
+  - Ingress: `external = true`, `target_port = 3000`, `transport = "http"`
+  - Easy Auth block: `identity_providers.azure_active_directory` with `client_id` and `client_secret_setting_name` pointing to Key Vault secret ref
+  - `auth_settings` enabled with `unauthenticated_client_action = "RedirectToLoginPage"`
+- **Key Vault** (`Azure/avm-res-keyvault-vault/azurerm`): stores `entra-client-secret`, `public_network_access_enabled = false`, `purge_protection_enabled = true`
+- **Log Analytics Workspace** (`Azure/avm-res-operationalinsights-workspace/azurerm`)
+- Naming: `ca-bdt-azure-mcp-server-dev-eus2-001`, `kv-bdt-azure-mcp-server-dev-eus2-001`, etc.
+- `variables.tf` exposes: `entra_client_id`, `entra_tenant_id` (non-sensitive), `container_image_tag` (default `"0.3.1"`)
+- Backend workspace: `alz-landingzones-azure-mcp-server`, tags `["non-prod"]`
+- `terraform.tfvars.example` includes: `entra_client_id`, `entra_tenant_id`, `container_image_tag`
+- Opens PR to `alz-landingzones-infra` with checklist: `terraform validate`, `tflint`, `checkov -d .`, Entra App Registration created, Key Vault secret seeded via `TF_VAR_entra_client_secret`

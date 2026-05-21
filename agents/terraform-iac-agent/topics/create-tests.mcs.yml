@@ -1,9 +1,11 @@
-# Create Tests — generates plan-level and E2E test files following the storage-module pattern
+mcs.metadata:
+  componentName: Collect Tests
 kind: AdaptiveDialog
 beginDialog:
   kind: OnRecognizedIntent
   id: main
   intent:
+    displayName: CollectTests
     triggerQueries:
       - create tests
       - add tests
@@ -20,16 +22,14 @@ beginDialog:
       - add testing to
   actions:
     - kind: SendActivity
-      id: sendMessage_TestsStart
-      activity:
-        text:
-          - |
-            I will generate a test suite following the storage-module pattern from alz-modules.
+      id: start001
+      activity: |
+        I will generate a test suite following the storage-module pattern from alz-modules.
 
-            This includes:
-            - **Plan tests** (tests/test_{name}.py) — tftest smoke tests, no real Azure resources needed
-            - **E2E tests** (tests/test_e2e_{name}.py) — applies real infrastructure, validates with Azure SDK, then destroys
-            - **requirements.txt** — pytest, tftest, azure-identity, and resource-specific azure-mgmt packages
+        This includes:
+        - **Plan tests** (tests/test_<name>.py) — tftest smoke tests, no real Azure resources needed
+        - **E2E tests** (tests/test_e2e_<name>.py) — applies real infrastructure, validates with Azure SDK, then destroys
+        - **requirements.txt** — pytest, tftest, azure-identity, and resource-specific azure-mgmt packages
 
     - kind: Question
       id: question_TargetName
@@ -57,7 +57,7 @@ beginDialog:
       id: question_Resources
       alwaysPrompt: false
       variable: init:Topic.Resources
-      prompt: Which Azure resources does this module or app create? (e.g. Storage Account, Key Vault, Virtual Network, App Service, MySQL). This determines which azure-mgmt packages to include and which properties to validate.
+      prompt: Which Azure resources does this module or app create? (e.g. Storage Account, Key Vault, Virtual Network, App Service, MySQL). This determines which azure-mgmt packages to include.
       entity: StringPrebuiltEntity
 
     - kind: Question
@@ -78,115 +78,53 @@ beginDialog:
         - id: conditionGroup-resolveBranch-item-0
           condition: =Topic.TargetType = "module"
           actions:
-            - kind: SetVariable
+            - kind: SetTextVariable
               id: setVar_branchModule
-              variable: Topic.TargetBranch
+              variable: Global.TargetBranch
               value: alz-modules
-            - kind: SetVariable
+            - kind: SetTextVariable
               id: setVar_pathModule
-              variable: Topic.TargetPath
-              value: =Topic.TargetName
+              variable: Global.TargetPath
+              value: "{Topic.TargetName}"
         - id: conditionGroup-resolveBranch-item-1
           condition: =true
           actions:
-            - kind: SetVariable
+            - kind: SetTextVariable
               id: setVar_branchApp
-              variable: Topic.TargetBranch
+              variable: Global.TargetBranch
               value: alz-landingzones-infra
-            - kind: SetVariable
+            - kind: SetTextVariable
               id: setVar_pathApp
-              variable: Topic.TargetPath
-              value: '=Concatenate("non-prod/", Topic.TargetName)'
+              variable: Global.TargetPath
+              value: "non-prod/{Topic.TargetName}"
+
+    - kind: SetTextVariable
+      id: setGlobal_targetName
+      variable: Global.TargetName
+      value: "{Topic.TargetName}"
+
+    - kind: SetTextVariable
+      id: setGlobal_targetType
+      variable: Global.TargetType
+      value: "{Topic.TargetType}"
+
+    - kind: SetTextVariable
+      id: setGlobal_resources
+      variable: Global.Resources
+      value: "{Topic.Resources}"
+
+    - kind: SetTextVariable
+      id: setGlobal_testScope
+      variable: Global.TestScope
+      value: "{Topic.TestScope}"
 
     - kind: SendActivity
-      id: sendMessage_Generating
-      activity: Generating test files for **{Topic.TargetName}** on the {Topic.TargetBranch} branch...
+      id: sendMessage_generating
+      activity: |
+        ⚙️ Generating **{Global.TestScope}** test suite for **{Global.TargetName}** on `{Global.TargetBranch}`...
 
-    - kind: InvokeFlowAction
-      id: invokeFlow_generateTestFiles
-      flowId: GenerateAndCommitTestFiles
-      input:
-        parameters:
-          targetName: =Topic.TargetName
-          targetType: =Topic.TargetType
-          targetPath: =Topic.TargetPath
-          resources: =Topic.Resources
-          testScope: =Topic.TestScope
-          branch: =Topic.TargetBranch
-          targetRepo: =Topic.TargetBranch
+        Files will be placed under `{Global.TargetPath}/tests/`. This may take a moment.
 
-    - kind: SetVariable
-      id: setVar_featureBranch
-      variable: Topic.FeatureBranch
-      value: '=Concatenate("tests-", Topic.TargetName, "-agent")'
-
-    - kind: InvokeFlowAction
-      id: invokeFlow_getBranchSHA
-      flowId: GetBranchSHA
-      input:
-        parameters:
-          branch: =Topic.TargetBranch
-      output:
-        binding:
-          baseSha: =Topic.BaseSHA
-
-    - kind: InvokeFlowAction
-      id: invokeFlow_createBranch
-      flowId: CreateGitHubBranch
-      input:
-        parameters:
-          newBranch: =Topic.FeatureBranch
-          baseSha: =Topic.BaseSHA
-          targetRepo: =Topic.TargetBranch
-
-    - kind: SetVariable
-      id: setVar_prTitle
-      variable: Topic.PrTitle
-      value: '=Concatenate("test: add ", Topic.TestScope, " tests for ", Topic.TargetName, " (agent)")'
-
-    - kind: SetVariable
-      id: setVar_prBody
-      variable: Topic.PrBody
-      value: '=Concatenate("## Summary", Char(10), "- Target: ", Topic.TargetName, " (", Topic.TargetType, ")", Char(10), "- Test scope: ", Topic.TestScope, Char(10), "- Resources tested: ", Topic.Resources, Char(10), Char(10), "## Test files", Char(10), "- tests/test_", Topic.TargetName, ".py (plan-level)", Char(10), "- tests/test_e2e_", Topic.TargetName, ".py (apply/destroy)", Char(10), "- tests/requirements.txt", Char(10), Char(10), "## How to run", Char(10), "pip install -r tests/requirements.txt", Char(10), "pytest tests/test_", Topic.TargetName, ".py -v")'
-
-    - kind: InvokeFlowAction
-      id: invokeFlow_createPR
-      flowId: CreateGitHubPR
-      input:
-        parameters:
-          featureBranch: =Topic.FeatureBranch
-          baseBranch: =Topic.TargetBranch
-          targetRepo: =Topic.TargetBranch
-          prTitle: =Topic.PrTitle
-          prBody: =Topic.PrBody
-      output:
-        binding:
-          prUrl: =Topic.PullRequestUrl
-
-    - kind: SendActivity
-      id: sendMessage_TestsCreated
-      activity:
-        text:
-          - |
-            Test suite for **{Topic.TargetName}** created on the {Topic.TargetBranch} branch.
-
-            **Branch:** {Topic.FeatureBranch}
-
-            **Files generated:**
-            - {Topic.TargetPath}/tests/test_{Topic.TargetName}.py — Plan-level smoke tests (no real Azure needed)
-            - {Topic.TargetPath}/tests/test_e2e_{Topic.TargetName}.py — E2E apply/destroy tests with Azure SDK
-            - {Topic.TargetPath}/tests/requirements.txt — pip dependencies
-
-            **To run plan tests locally:**
-            ```
-            pip install -r {Topic.TargetPath}/tests/requirements.txt
-            pytest {Topic.TargetPath}/tests/test_{Topic.TargetName}.py -v
-            ```
-
-            **To run E2E tests (requires real Azure subscription):**
-            ```
-            export ARM_SUBSCRIPTION_ID=<your-subscription-id>
-            pytest {Topic.TargetPath}/tests/test_e2e_{Topic.TargetName}.py -v -s
-            ```
-
-            **Pull Request:** {Topic.PullRequestUrl}
+    - kind: BeginDialog
+      id: redirectToTestGenerator
+      dialog: generate-push-tests
