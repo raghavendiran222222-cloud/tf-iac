@@ -28,12 +28,56 @@ jobs:
     needs: detect
     if: needs.detect.outputs.changed != '[]'
     name: tftest (${{ matrix.target }})
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         target: ${{ fromJson(needs.detect.outputs.changed) }}
-    uses: btdmsd/github-actions-workflows/.github/workflows/module-tests.yml@main
-    with:
-      working-directory: non-prod/${{ matrix.target }}
-      environment: non-prod-plan
-    secrets: inherit
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~> 1.9"
+          terraform_wrapper: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        working-directory: non-prod/${{ matrix.target }}
+        run: |
+          if [[ -f tests/requirements.txt ]]; then
+            pip install -r tests/requirements.txt
+          else
+            pip install pytest python-tftest
+          fi
+
+      - name: Terraform Init (no backend)
+        working-directory: non-prod/${{ matrix.target }}
+        run: terraform init -backend=false
+        env:
+          TF_CLI_ARGS_init: "-backend=false"
+
+      - name: pytest (plan-level assertions)
+        working-directory: non-prod/${{ matrix.target }}
+        env:
+          TF_CLI_ARGS_init: "-backend=false"
+          TF_VAR_mysql_admin_password: "TestPassword123!"
+        run: |
+          if ls tests/*.py 2>/dev/null | grep -qv e2e; then
+            pytest tests/ -v --tb=short --ignore-glob="*e2e*"
+          else
+            echo "No plan-level pytest files found — skipping"
+          fi
+
+      - name: terraform test (native HCL tests)
+        working-directory: non-prod/${{ matrix.target }}
+        run: |
+          if ls tests/*.tftest.hcl 2>/dev/null; then
+            terraform test -test-directory=tests
+          else
+            echo "No .tftest.hcl files found — skipping"
+          fi
