@@ -2,7 +2,6 @@ name: CI — github-action-test-resource
 
 on:
   push:
-    branches: [main]
     paths:
       - "examples/github-action-test-resource/**"
       - ".github/workflows/ci-example-test-resource.yaml"
