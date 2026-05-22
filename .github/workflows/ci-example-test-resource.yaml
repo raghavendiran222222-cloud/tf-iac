@@ -11,6 +11,11 @@ on:
       - ".github/workflows/ci-example-test-resource.yaml"
   workflow_dispatch:
 
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
