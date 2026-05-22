@@ -31,8 +31,17 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Fetch shared helpers
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: github-actions-workflows
+          path: .shared
+          sparse-checkout: helpers/
+
       - id: detect
-        run: bash scripts/detect-changed-modules.sh >> "$GITHUB_OUTPUT"
+        run: bash .shared/helpers/detect-changed-modules.sh >> "$GITHUB_OUTPUT"
 
   test:
     needs: detect
