@@ -3,6 +3,8 @@ name: PR Validation
 on:
   pull_request:
     branches: [main]
+    paths:
+      - "non-prod/**"
 
 permissions:
   contents: read
