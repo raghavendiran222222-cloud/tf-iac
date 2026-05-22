@@ -34,7 +34,11 @@ jobs:
           sparse-checkout: helpers/
 
       - id: detect
-        run: bash .shared/helpers/detect-changed-envs.sh >> "$GITHUB_OUTPUT"
+        env:
+          PATTERN: '^non-prod/'
+          FIELD: "2"
+          PREFIX: "non-prod"
+        run: bash .shared/helpers/detect-changes.sh >> "$GITHUB_OUTPUT"
 
   validate:
     needs: detect
@@ -43,8 +47,32 @@ jobs:
       fail-fast: false
       matrix:
         target: ${{ fromJson(needs.detect.outputs.changed) }}
-    uses: btdmsd/github-actions-workflows/.github/workflows/tf-validate.yml@main
+    uses: btdmsd/github-actions-workflows/.github/workflows/fmt-validate.yaml@main
+    with:
+      working-directory: non-prod/${{ matrix.target }}
+    secrets: inherit
+
+  plan:
+    needs: detect
+    if: needs.detect.outputs.changed != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJson(needs.detect.outputs.changed) }}
+    uses: btdmsd/github-actions-workflows/.github/workflows/plan.yaml@main
     with:
       working-directory: non-prod/${{ matrix.target }}
       environment: non-prod-plan
+    secrets: inherit
+
+  checkov:
+    needs: plan
+    if: needs.detect.outputs.changed != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJson(needs.detect.outputs.changed) }}
+    uses: btdmsd/github-actions-workflows/.github/workflows/checkov.yaml@main
+    with:
+      working-directory: non-prod/${{ matrix.target }}
     secrets: inherit

@@ -31,7 +31,11 @@ jobs:
           sparse-checkout: helpers/
 
       - id: detect
-        run: bash .shared/helpers/detect-changed-envs.sh >> "$GITHUB_OUTPUT"
+        env:
+          PATTERN: '^non-prod/'
+          FIELD: "2"
+          PREFIX: "non-prod"
+        run: bash .shared/helpers/detect-changes.sh >> "$GITHUB_OUTPUT"
 
   tftest:
     needs: detect
