@@ -1,7 +1,7 @@
-# github-actions-workflows
+# Github action workflows
 
 Shared reusable GitHub Actions workflows and helpers for Terraform repositories.
-Consumed by caller workflows via `btdmsd/github-actions-workflows/.github/workflows/<name>@main`.
+Consumed by caller workflows via `bdtmsd/github-actions-workflows/.github/workflows/<name>@main`.
 
 ## Workflows
 
@@ -11,7 +11,7 @@ Fail-fast syntax gate: `terraform fmt`, `terraform init -backend=false`, `terraf
 ```yaml
 jobs:
   fmt-validate:
-    uses: btdmsd/github-actions-workflows/.github/workflows/fmt-validate.yaml@main
+    uses: bdtmsd/github-actions-workflows/.github/workflows/fmt-validate.yaml@main
     with:
       working-directory: non-prod/my-workload
     secrets: inherit
@@ -31,7 +31,7 @@ Authenticates via Azure OIDC, runs `terraform plan`, uploads the plan artifact, 
 ```yaml
 jobs:
   plan:
-    uses: btdmsd/github-actions-workflows/.github/workflows/plan.yaml@main
+    uses: bdtmsd/github-actions-workflows/.github/workflows/plan.yaml@main
     with:
       working-directory: non-prod/my-workload
       environment: non-prod-plan
@@ -60,7 +60,7 @@ Downloads the plan artifact produced by `plan.yaml` and runs Checkov against `tf
 jobs:
   checkov:
     needs: [plan]
-    uses: btdmsd/github-actions-workflows/.github/workflows/checkov.yaml@main
+    uses: bdtmsd/github-actions-workflows/.github/workflows/checkov.yaml@main
     with:
       working-directory: non-prod/my-workload
     secrets: inherit
@@ -83,7 +83,7 @@ Downloads the plan artifact produced by `plan.yaml`, re-inits with apply credent
 jobs:
   deploy:
     needs: [plan-post-merge]
-    uses: btdmsd/github-actions-workflows/.github/workflows/apply.yaml@main
+    uses: bdtmsd/github-actions-workflows/.github/workflows/apply.yaml@main
     with:
       working-directory: non-prod/my-workload
       environment: non-prod-my-workload
@@ -105,7 +105,7 @@ Runs plan-level pytest and `terraform test` (HCL) for apps, and optionally e2e t
 ```yaml
 jobs:
   tf-test:
-    uses: btdmsd/github-actions-workflows/.github/workflows/tf-test.yaml@main
+    uses: bdtmsd/github-actions-workflows/.github/workflows/tf-test.yaml@main
     with:
       working-directory: non-prod/my-workload
       repo-type: app      # app | module
