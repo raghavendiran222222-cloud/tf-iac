@@ -9,12 +9,20 @@ on:
     branches: [main]
     paths:
       - "non-prod/infra-agent/**"
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Action to run"
+        required: true
+        type: choice
+        options: [destroy]
 
 concurrency:
   group: infra-agent-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # ── PR: fail fast on syntax/format ────────────────────────────────────────
   fmt-validate:
     if: github.event_name == 'pull_request'
     uses: btdmsd/github-actions-workflows/.github/workflows/fmt-validate.yaml@main
@@ -22,77 +30,98 @@ jobs:
       working-directory: non-prod/infra-agent
     secrets: inherit
 
+  # ── PR: plan (needs fmt-validate to pass first) ───────────────────────────
   plan:
     if: github.event_name == 'pull_request'
+    needs: [fmt-validate]
     uses: btdmsd/github-actions-workflows/.github/workflows/plan.yaml@main
     with:
       working-directory: non-prod/infra-agent
       environment: non-prod-plan
     secrets: inherit
 
+  # ── PR: security gate on plan JSON ────────────────────────────────────────
   checkov:
-    needs: plan
     if: github.event_name == 'pull_request'
+    needs: [plan]
     uses: btdmsd/github-actions-workflows/.github/workflows/checkov.yaml@main
     with:
       working-directory: non-prod/infra-agent
     secrets: inherit
 
-  tftest:
+  # ── PR: optional unit/plan-level tests (parallel with plan) ───────────────
+  tf-test:
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    needs: [fmt-validate]
+    uses: btdmsd/github-actions-workflows/.github/workflows/tf-test.yaml@main
+    with:
+      working-directory: non-prod/infra-agent
+      repo-type: app
+      test-type: plan
+    secrets: inherit
 
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "~> 1.9"
-          terraform_wrapper: false
+  # ── Post-merge: re-plan to catch drift ────────────────────────────────────
+  plan-post-merge:
+    if: github.event_name == 'push'
+    uses: btdmsd/github-actions-workflows/.github/workflows/plan.yaml@main
+    with:
+      working-directory: non-prod/infra-agent
+      environment: non-prod-plan
+    secrets: inherit
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install test dependencies
-        working-directory: non-prod/infra-agent
-        run: |
-          if [[ -f tests/requirements.txt ]]; then
-            pip install -r tests/requirements.txt
-          else
-            pip install pytest python-tftest
-          fi
-
-      - name: Terraform Init (no backend)
-        working-directory: non-prod/infra-agent
-        run: terraform init -backend=false
-        env:
-          TF_CLI_ARGS_init: "-backend=false"
-
-      - name: pytest (plan-level)
-        working-directory: non-prod/infra-agent
-        env:
-          TF_CLI_ARGS_init: "-backend=false"
-        run: |
-          mapfile -t files < <(ls tests/*.py 2>/dev/null | grep -v e2e || true)
-          if [[ ${#files[@]} -eq 0 ]]; then
-            echo "No plan-level pytest files — skipping"
-          else
-            pytest -v --tb=short "${files[@]}"
-          fi
-
-      - name: terraform test (HCL)
-        working-directory: non-prod/infra-agent
-        run: |
-          if ls tests/*.tftest.hcl 2>/dev/null; then
-            terraform test -test-directory=tests
-          else
-            echo "No .tftest.hcl files — skipping"
-          fi
-
+  # ── Post-merge: apply with manual approval gate ───────────────────────────
   deploy:
     if: github.event_name == 'push'
+    needs: [plan-post-merge]
     uses: btdmsd/github-actions-workflows/.github/workflows/apply.yaml@main
     with:
       working-directory: non-prod/infra-agent
       environment: non-prod-infra-agent
     secrets: inherit
+
+  # ── Manual: destroy with approval gate (workflow_dispatch only) ───────────
+  destroy:
+    if: github.event_name == 'workflow_dispatch' && inputs.action == 'destroy'
+    runs-on: ubuntu-latest
+    environment: non-prod-infra-agent-destroy
+    permissions:
+      id-token: write
+      contents: read
+    defaults:
+      run:
+        working-directory: non-prod/infra-agent
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~> 1.9"
+          terraform_wrapper: false
+          cli_config_credentials_token: ${{ secrets.TFE_TOKEN }}
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Terraform Init
+        run: terraform init -input=false
+        env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_USE_OIDC: "true"
+          TF_CLOUD_ORGANIZATION: ${{ secrets.TF_CLOUD_ORGANIZATION }}
+
+      - name: Terraform Destroy
+        run: terraform destroy -input=false -auto-approve
+        env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_USE_OIDC: "true"
