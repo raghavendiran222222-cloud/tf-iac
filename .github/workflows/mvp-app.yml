@@ -79,6 +79,18 @@ jobs:
       environment: non-prod-mvp-app
     secrets: inherit
 
+  # ── Post-merge: e2e tests against deployed infra ─────────────────────────
+  pytest-e2e:
+    if: github.event_name == 'push'
+    needs: [deploy]
+    uses: btdmsd/github-actions-workflows/.github/workflows/tf-test.yaml@main
+    with:
+      working-directory: non-prod/mvp-app
+      repo-type: app
+      test-type: e2e
+      environment: non-prod-mvp-app
+    secrets: inherit
+
   # ── Manual: destroy with approval gate (workflow_dispatch only) ───────────
   destroy:
     if: github.event_name == 'workflow_dispatch' && inputs.action == 'destroy'
