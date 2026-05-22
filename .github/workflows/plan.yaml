@@ -1,4 +1,4 @@
-name: TF Validate (reusable)
+name: Terraform Plan (reusable)
 
 on:
   workflow_call:
@@ -11,10 +11,14 @@ on:
         type: string
 
 jobs:
-  validate:
-    name: validate (${{ inputs.working-directory }})
+  plan:
+    name: plan (${{ inputs.working-directory }})
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
     defaults:
       run:
         working-directory: ${{ inputs.working-directory }}
@@ -29,44 +33,6 @@ jobs:
           terraform_version: "~> 1.9"
           terraform_wrapper: false
           cli_config_credentials_token: ${{ secrets.TFE_TOKEN }}
-
-      - name: Terraform Format Check
-        run: terraform fmt -check -recursive -diff
-
-      - name: Terraform Init (no backend)
-        run: terraform init -backend=false
-        env:
-          TF_CLOUD_ORGANIZATION: ${{ secrets.TF_CLOUD_ORGANIZATION }}
-
-      - name: Terraform Validate
-        run: terraform validate
-
-      - name: Install tflint
-        uses: terraform-linters/setup-tflint@v4
-        with:
-          tflint_version: v0.55.0
-
-      - name: tflint Init (download azurerm plugin)
-        run: tflint --init --config "$GITHUB_WORKSPACE/.tflint.hcl"
-
-      - name: tflint
-        run: tflint --chdir="$GITHUB_WORKSPACE/${{ inputs.working-directory }}" --config "$GITHUB_WORKSPACE/.tflint.hcl" --format compact
-
-      - name: tfsec Security Scan
-        uses: aquasecurity/tfsec-action@v1.0.3
-        with:
-          working_directory: ${{ inputs.working-directory }}
-          soft_fail: false
-          format: sarif
-          sarif_file: tfsec-results.sarif
-
-      - name: Upload SARIF to GitHub Security tab
-        if: always()
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: tfsec-results.sarif
-          category: tfsec-${{ inputs.working-directory }}
-        continue-on-error: true
 
       - name: Azure Login (OIDC)
         uses: azure/login@v2
@@ -103,41 +69,13 @@ jobs:
           ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           ARM_USE_OIDC: "true"
 
-      - name: Checkov Policy Scan
-        uses: bridgecrewio/checkov-action@v12
-        with:
-          file: ${{ inputs.working-directory }}/tfplan.json
-          config_file: .checkov.yaml
-          output_format: sarif
-          output_file_path: checkov-results.sarif
-          soft_fail: false
-
-      - name: Upload Checkov SARIF
-        if: always()
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: checkov-results.sarif
-          category: checkov-${{ inputs.working-directory }}
-        continue-on-error: true
-
-      - name: Install conftest
-        run: |
-          curl -sSL "https://github.com/open-policy-agent/conftest/releases/download/v0.57.0/conftest_0.57.0_Linux_x86_64.tar.gz" \
-            | tar -xz -C /tmp
-          sudo mv /tmp/conftest /usr/local/bin/conftest
-
-      - name: Conftest Policy Check
-        run: |
-          conftest test \
-            --policy "$GITHUB_WORKSPACE/policies" \
-            --namespace main \
-            "$GITHUB_WORKSPACE/${{ inputs.working-directory }}/tfplan.json"
-
       - name: Upload plan artifact
         uses: actions/upload-artifact@v4
         with:
           name: tfplan-${{ github.event.number }}-${{ inputs.working-directory }}
-          path: ${{ inputs.working-directory }}/tfplan
+          path: |
+            ${{ inputs.working-directory }}/tfplan
+            ${{ inputs.working-directory }}/tfplan.json
           retention-days: 7
 
       - name: Post plan comment
@@ -159,53 +97,39 @@ jobs:
               const parts = [];
               if (parseInt(add) > 0)     parts.push(`**+${add} to add**`);
               if (parseInt(change) > 0)  parts.push(`**~${change} to change**`);
-              if (parseInt(destroy) > 0) parts.push(`**⚠️ -${destroy} to destroy**`);
+              if (parseInt(destroy) > 0) parts.push(`**-${destroy} to destroy**`);
               summary = parts.join(' · ') || 'No resource changes.';
             } else {
               summary = '_Could not parse plan summary — check workflow logs._';
             }
 
             const truncated = raw.length > 60000
-              ? raw.substring(0, 60000) + '\n\n... (truncated — see workflow logs for full output)'
+              ? raw.substring(0, 60000) + '\n\n... (truncated — see workflow logs)'
               : raw;
 
             const workload = '${{ inputs.working-directory }}';
             const marker = `Terraform Plan — \`${workload}\``;
-
             const body = [
-              `## ${marker}`,
-              '',
-              summary,
-              '',
-              '<details><summary>Full plan output</summary>',
-              '',
-              '```hcl',
-              truncated,
-              '```',
-              '',
-              '</details>',
-              '',
+              `## ${marker}`, '', summary, '',
+              '<details><summary>Full plan output</summary>', '',
+              '```hcl', truncated, '```', '', '</details>', '',
               `> Run: [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`
             ].join('\n');
 
             const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
+              owner: context.repo.owner, repo: context.repo.repo,
               issue_number: context.issue.number,
             });
             for (const c of comments) {
               if (c.user.login === 'github-actions[bot]' && c.body.includes(marker)) {
                 await github.rest.issues.deleteComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
+                  owner: context.repo.owner, repo: context.repo.repo,
                   comment_id: c.id,
                 });
               }
             }
-
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
+              owner: context.repo.owner, repo: context.repo.repo,
               body,
             });

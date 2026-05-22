@@ -1,13 +1,18 @@
-name: Module Tests (reusable)
+name: Terraform Test (reusable)
 
 on:
   workflow_call:
     inputs:
       working-directory:
-        description: "Root directory of the module (e.g. storage-module)"
+        description: "Root directory of the module or application"
         required: true
         type: string
-      test_type:
+      repo-type:
+        description: "module (root-level Terraform module) or app (non-prod workload)"
+        required: false
+        default: app
+        type: string
+      test-type:
         description: "plan | e2e | all"
         required: false
         default: plan
@@ -18,10 +23,13 @@ on:
         default: non-prod-plan
         type: string
 
+# ── Plan-level tests ───────────────────────────────────────────────────────────
+# Runs pytest (non-e2e) for modules, and pytest + terraform test for apps.
+# No real Azure resources are deployed.
 jobs:
   plan-tests:
-    name: "plan · ${{ inputs.working-directory }}"
-    if: inputs.test_type == 'plan' || inputs.test_type == 'all'
+    name: "plan-tests (${{ inputs.working-directory }})"
+    if: inputs.test-type == 'plan' || inputs.test-type == 'all'
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     permissions:
@@ -44,44 +52,52 @@ jobs:
           cache: pip
           cache-dependency-path: "${{ inputs.working-directory }}/tests/requirements.txt"
 
-      - name: Azure Login (OIDC)
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
       - name: Install Python dependencies
         run: pip install -r "${{ inputs.working-directory }}/tests/requirements.txt"
 
-      - name: Terraform Init (no backend)
+      - name: Terraform Init — module (examples/basic)
+        if: inputs.repo-type == 'module'
         working-directory: "${{ inputs.working-directory }}/examples/basic"
         run: terraform init -backend=false
         env:
-          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          ARM_USE_OIDC: "true"
+          TF_CLI_ARGS_init: "-backend=false"
 
-      - name: Run plan-level pytest tests
+      - name: Terraform Init — app (working-directory root)
+        if: inputs.repo-type == 'app'
+        working-directory: "${{ inputs.working-directory }}"
+        run: terraform init -backend=false
+        env:
+          TF_CLI_ARGS_init: "-backend=false"
+
+      - name: Run plan-level pytest
         working-directory: "${{ inputs.working-directory }}/tests"
         env:
-          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          ARM_USE_OIDC: "true"
           TF_CLI_ARGS_init: "-backend=false"
         run: |
-          mapfile -t plan_files < <(ls test_*.py 2>/dev/null | grep -v e2e || true)
-          if [[ ${#plan_files[@]} -eq 0 ]]; then
-            echo "No plan-level test files found — skipping."
-            exit 0
+          mapfile -t files < <(ls test_*.py 2>/dev/null | grep -v e2e || true)
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "No plan-level pytest files found — skipping."
+          else
+            pytest -v --tb=short "${files[@]}"
           fi
-          pytest -v --tb=short "${plan_files[@]}"
 
+      - name: Run terraform test (HCL) — app only
+        if: inputs.repo-type == 'app'
+        working-directory: "${{ inputs.working-directory }}"
+        run: |
+          if ls tests/*.tftest.hcl 2>/dev/null; then
+            terraform test -test-directory=tests
+          else
+            echo "No .tftest.hcl files found — skipping."
+          fi
+
+# ── End-to-end tests ───────────────────────────────────────────────────────────
+# Deploys real Azure infrastructure and destroys it. Module repos only.
   e2e-tests:
-    name: "e2e · ${{ inputs.working-directory }}"
-    if: inputs.test_type == 'e2e' || inputs.test_type == 'all'
+    name: "e2e-tests (${{ inputs.working-directory }})"
+    if: |
+      inputs.repo-type == 'module' &&
+      (inputs.test-type == 'e2e' || inputs.test-type == 'all')
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     permissions:
@@ -122,9 +138,9 @@ jobs:
           ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           ARM_USE_OIDC: "true"
         run: |
-          mapfile -t e2e_files < <(ls test_*e2e*.py 2>/dev/null || true)
-          if [[ ${#e2e_files[@]} -eq 0 ]]; then
+          mapfile -t files < <(ls test_*e2e*.py 2>/dev/null || true)
+          if [[ ${#files[@]} -eq 0 ]]; then
             echo "No e2e test files found — skipping."
-            exit 0
+          else
+            pytest -v -s "${files[@]}"
           fi
-          pytest -v -s "${e2e_files[@]}"

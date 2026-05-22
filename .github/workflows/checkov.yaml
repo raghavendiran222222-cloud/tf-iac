@@ -1,0 +1,50 @@
+name: Checkov Scan (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        required: true
+        type: string
+      plan-json:
+        description: "Path to tfplan.json relative to working-directory"
+        required: false
+        default: tfplan.json
+        type: string
+      soft-fail:
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  checkov:
+    name: checkov (${{ inputs.working-directory }})
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Download plan artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-${{ github.event.number }}-${{ inputs.working-directory }}
+          path: ${{ inputs.working-directory }}
+
+      - name: Checkov Policy Scan
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          file: ${{ inputs.working-directory }}/${{ inputs.plan-json }}
+          config_file: .checkov.yaml
+          output_format: sarif
+          output_file_path: checkov-results.sarif
+          soft_fail: ${{ inputs.soft-fail }}
+
+      - name: Upload Checkov SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: checkov-results.sarif
+          category: checkov-${{ inputs.working-directory }}
+        continue-on-error: true
