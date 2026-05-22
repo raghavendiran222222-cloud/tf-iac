@@ -73,6 +73,7 @@ jobs:
         working-directory: "${{ inputs.working-directory }}/tests"
         env:
           TF_CLI_ARGS_init: "-backend=false"
+          TF_VAR_mysql_admin_password: ${{ secrets.TF_VAR_MYSQL_ADMIN_PASSWORD }}
         run: |
           mapfile -t files < <(ls test_*.py 2>/dev/null | grep -v e2e || true)
           if [[ ${#files[@]} -eq 0 ]]; then
@@ -92,12 +93,10 @@ jobs:
           fi
 
 # ── End-to-end tests ───────────────────────────────────────────────────────────
-# Deploys real Azure infrastructure and destroys it. Module repos only.
+# Deploys real Azure infrastructure and destroys it.
   e2e-tests:
     name: "e2e-tests (${{ inputs.working-directory }})"
-    if: |
-      inputs.repo-type == 'module' &&
-      (inputs.test-type == 'e2e' || inputs.test-type == 'all')
+    if: inputs.test-type == 'e2e' || inputs.test-type == 'all'
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     permissions:
@@ -137,6 +136,7 @@ jobs:
           ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           ARM_USE_OIDC: "true"
+          TF_VAR_mysql_admin_password: ${{ secrets.TF_VAR_MYSQL_ADMIN_PASSWORD }}
         run: |
           mapfile -t files < <(ls test_*e2e*.py 2>/dev/null || true)
           if [[ ${#files[@]} -eq 0 ]]; then
