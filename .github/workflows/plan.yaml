@@ -22,52 +22,52 @@ jobs:
     defaults:
       run:
         working-directory: ${{ inputs.working-directory }}
+    env:
+      ARM_USE_OIDC: "true"
 
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
 
+      - name: Fetch secrets from HCP Vault Dedicated
+        uses: hashicorp/vault-action@v3
+        with:
+          url: ${{ secrets.VAULT_ADDR }}
+          method: jwt
+          role: ${{ secrets.VAULT_ROLE }}
+          exportEnv: true
+          secrets: |
+            kv/data/azure client_id        | AZURE_CLIENT_ID ;
+            kv/data/azure tenant_id        | AZURE_TENANT_ID ;
+            kv/data/azure subscription_id  | AZURE_SUBSCRIPTION_ID ;
+            kv/data/terraform organization | TF_CLOUD_ORGANIZATION ;
+            kv/data/terraform tfe_token    | TFE_TOKEN ;
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "~> 1.9"
           terraform_wrapper: false
-          cli_config_credentials_token: ${{ secrets.TFE_TOKEN }}
+          cli_config_credentials_token: ${{ env.TFE_TOKEN }}
 
       - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
       - name: Terraform Init
         run: terraform init -input=false
-        env:
-          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          ARM_USE_OIDC: "true"
-          TF_CLOUD_ORGANIZATION: ${{ secrets.TF_CLOUD_ORGANIZATION }}
 
       - name: Terraform Plan
         id: plan
         run: |
           terraform plan -input=false -no-color -out=tfplan 2>&1 | tee plan_output.txt
           echo "exitcode=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
-        env:
-          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          ARM_USE_OIDC: "true"
 
       - name: Export plan JSON
         run: terraform show -json tfplan > tfplan.json
-        env:
-          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          ARM_USE_OIDC: "true"
 
       - name: Upload plan artifact
         uses: actions/upload-artifact@v4

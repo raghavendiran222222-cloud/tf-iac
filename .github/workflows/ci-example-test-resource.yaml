@@ -1,0 +1,72 @@
+name: CI — github-action-test-resource
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "examples/github-action-test-resource/**"
+      - ".github/workflows/ci-example-test-resource.yaml"
+  pull_request:
+    paths:
+      - "examples/github-action-test-resource/**"
+      - ".github/workflows/ci-example-test-resource.yaml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Static checks (no credentials needed) ─────────────────────────────────
+  fmt-validate:
+    uses: ./.github/workflows/fmt-validate.yaml
+    with:
+      working-directory: examples/github-action-test-resource
+
+  # ── Plan-level tests (terraform init -backend=false + pytest + tftest HCL) ─
+  tf-test-plan:
+    uses: ./.github/workflows/tf-test.yaml
+    secrets: inherit
+    with:
+      working-directory: examples/github-action-test-resource
+      repo-type: app
+      test-type: plan
+      environment: non-prod-plan
+
+  # ── Terraform plan (uploads tfplan artifact for checkov) ──────────────────
+  plan:
+    uses: ./.github/workflows/plan.yaml
+    secrets: inherit
+    with:
+      working-directory: examples/github-action-test-resource
+      environment: non-prod-plan
+
+  # ── Security scan against plan JSON ───────────────────────────────────────
+  checkov:
+    needs: plan
+    uses: ./.github/workflows/checkov.yaml
+    with:
+      working-directory: examples/github-action-test-resource
+      soft-fail: true
+
+  # ── Apply (main branch only, all gates must pass) ─────────────────────────
+  apply:
+    needs: [fmt-validate, tf-test-plan, plan, checkov]
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/apply.yaml
+    secrets: inherit
+    with:
+      working-directory: examples/github-action-test-resource
+      environment: non-prod
+
+  # ── End-to-end tests (runs after real infra is deployed) ──────────────────
+  tf-test-e2e:
+    needs: apply
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/tf-test.yaml
+    secrets: inherit
+    with:
+      working-directory: examples/github-action-test-resource
+      repo-type: app
+      test-type: e2e
+      environment: non-prod
