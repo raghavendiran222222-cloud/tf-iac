@@ -2,10 +2,10 @@ name: Module Tests
 
 on:
   pull_request:
-    branches: [main, alz-modules]
+    branches: [ main, alz-modules ]
     paths:
-      - "*-module/**"
-      - ".github/workflows/module-tests.yml"
+    - "*-module/**"
+    - ".github/workflows/module-tests.yml"
   workflow_dispatch:
     inputs:
       test-type:
@@ -14,9 +14,9 @@ on:
         default: plan
         type: choice
         options:
-          - plan
-          - e2e
-          - all
+        - plan
+        - e2e
+        - all
 
 concurrency:
   group: module-tests-${{ github.event.number || github.run_id }}
@@ -28,24 +28,24 @@ jobs:
     outputs:
       changed: ${{ steps.detect.outputs.changed }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
-      - name: Fetch shared helpers
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ github.repository }}
-          ref: github-actions-workflows
-          path: .shared
-          sparse-checkout: helpers/
+    - name: Fetch shared helpers
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ github.repository }}
+        ref: github-actions-workflows
+        path: .shared
+        sparse-checkout: helpers/
 
-      - id: detect
-        env:
-          PATTERN: '^[^/]+-module/'
-          FIELD: "1"
-          REQUIRE_TESTS: "true"
-        run: bash .shared/helpers/detect-changes.sh >> "$GITHUB_OUTPUT"
+    - id: detect
+      env:
+        PATTERN: '^[^/]+-module/'
+        FIELD: "1"
+        REQUIRE_TESTS: "true"
+      run: bash .shared/helpers/detect-changes.sh >> "$GITHUB_OUTPUT"
 
   test:
     needs: detect
@@ -55,7 +55,7 @@ jobs:
       fail-fast: false
       matrix:
         module: ${{ fromJson(needs.detect.outputs.changed) }}
-    uses: btdmsd/github-actions-workflows/.github/workflows/tf-test.yaml@main
+    uses: bdtmsd/github-actions-workflows/.github/workflows/tf-test.yaml@main
     with:
       working-directory: ${{ matrix.module }}
       repo-type: module
