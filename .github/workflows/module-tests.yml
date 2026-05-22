@@ -8,7 +8,7 @@ on:
       - ".github/workflows/module-tests.yml"
   workflow_dispatch:
     inputs:
-      test_type:
+      test-type:
         description: "Test type"
         required: false
         default: plan
@@ -41,7 +41,11 @@ jobs:
           sparse-checkout: helpers/
 
       - id: detect
-        run: bash .shared/helpers/detect-changed-modules.sh >> "$GITHUB_OUTPUT"
+        env:
+          PATTERN: '^[^/]+-module/'
+          FIELD: "1"
+          REQUIRE_TESTS: "true"
+        run: bash .shared/helpers/detect-changes.sh >> "$GITHUB_OUTPUT"
 
   test:
     needs: detect
@@ -51,9 +55,10 @@ jobs:
       fail-fast: false
       matrix:
         module: ${{ fromJson(needs.detect.outputs.changed) }}
-    uses: btdmsd/github-actions-workflows/.github/workflows/module-tests.yml@main
+    uses: btdmsd/github-actions-workflows/.github/workflows/tf-test.yaml@main
     with:
       working-directory: ${{ matrix.module }}
-      test_type: ${{ inputs.test_type || 'plan' }}
+      repo-type: module
+      test-type: ${{ inputs.test-type || 'plan' }}
       environment: non-prod-plan
     secrets: inherit
