@@ -1,2 +1,7 @@
 pytest>=7.4.0
 python-tftest>=1.10.0
+azure-identity>=1.15.0
+azure-mgmt-network>=25.0.0
+azure-mgmt-web>=7.2.0
+azure-mgmt-storage>=21.0.0
+azure-mgmt-rdbms>=10.0.0

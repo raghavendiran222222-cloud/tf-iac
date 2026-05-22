@@ -1,163 +1,223 @@
 """
-Pytest / python-tftest smoke tests for non-prod/mvp-app.
+Lightweight plan-level tests for non-prod/mvp-app.
+
+Validates naming conventions, security configuration, and resource presence
+from a `terraform plan` without deploying real infrastructure.
 
 Prerequisites:
-    pip install pytest python-tftest
+    pip install -r tests/requirements.txt
 
 Run:
-    pytest -v tests/
+    pytest -v tests/test_mvp_app.py
 """
 
-import os
+import pytest
+import tftest
 from pathlib import Path
 
-import pytest
+DIRECTORY = Path(__file__).parent.parent
+TF_VARS_FILE = str(Path(__file__).parent / "fixtures" / "terraform.tfvars")
+ENV = "sandbox"
 
-try:
-    import tftest
+VALID_VNET_NAME        = f"vnet-bdt-mvp-{ENV}-eus2-001"
+VALID_NSG_APP_NAME     = f"nsg-bdt-mvp-app-{ENV}-eus2-001"
+VALID_ASP_NAME         = f"asp-bdt-mvp-{ENV}-eus2-001"
+VALID_APP_NAME         = f"app-bdt-mvp-{ENV}-eus2-001"
+VALID_MYSQL_NAME       = f"mysql-bdt-mvp-{ENV}-eus2-001"
+VALID_STORAGE_NAME     = f"stbdtmvp{ENV}eus2001"
+VALID_SUBNET_APP_NAME  = f"snet-bdt-app-{ENV}-eus2-001"
+VALID_SUBNET_DATA_NAME = f"snet-bdt-data-{ENV}-eus2-001"
+VALID_MYSQL_DNS_ZONE   = "privatelink.mysql.database.azure.com"
+VALID_MYSQL_VERSION    = "8.0.21"
 
-    TFTEST_AVAILABLE = True
-except ImportError:
-    TFTEST_AVAILABLE = False
 
-_ROOT = Path(__file__).parent.parent
-_TFVARS = str(_ROOT / "tests" / "fixtures" / "terraform.tfvars")
+@pytest.fixture(scope="module")
+def plan():
+    tf = tftest.TerraformTest(DIRECTORY)
+    tf.setup(cleanup_on_exit=False)
+    return tf.plan(output=True, tf_var_file=TF_VARS_FILE)
 
 
-@pytest.mark.skipif(not TFTEST_AVAILABLE, reason="python-tftest not installed")
-class TestMvpAppModule:
-    """Plan-level validation for non-prod/mvp-app."""
+# ── VNet ──────────────────────────────────────────────────────────────────────
 
-    @pytest.fixture(scope="class")
-    def plan(self):
-        tf = tftest.TerraformTest(
-            tfdir=str(_ROOT),
-            env={
-                **os.environ,
-                "TF_CLI_ARGS_init": "-backend=false",
-                "TF_CLI_ARGS_plan": "-lock=false",
-            },
-        )
-        tf.setup(extra_files=[_TFVARS])
-        yield tf.plan(output=True)
-        tf.teardown()
+def test_vnet_name(plan):
+    module = plan.modules["module.vnet"]
+    vnet = module.resources["azurerm_virtual_network.this"]
+    assert vnet["values"]["name"] == VALID_VNET_NAME
 
-    # ── Plan health ───────────────────────────────────────────────────────────
 
-    def test_plan_succeeds(self, plan):
-        assert plan is not None
+def test_vnet_address_space(plan):
+    module = plan.modules["module.vnet"]
+    vnet = module.resources["azurerm_virtual_network.this"]
+    assert "10.30.0.0/16" in vnet["values"]["address_space"]
 
-    # ── Networking ────────────────────────────────────────────────────────────
 
-    def test_vnet_present(self, plan):
-        vnet = [k for k in plan.resource_changes if "azurerm_virtual_network" in k and "module.vnet" in k]
-        assert len(vnet) > 0, "Expected VNet resource under module.vnet"
+def test_app_subnet_present(plan):
+    module = plan.modules["module.vnet"]
+    assert any(VALID_SUBNET_APP_NAME in k for k in module.resources)
 
-    def test_vnet_action_create(self, plan):
-        key = next(k for k in plan.resource_changes if "azurerm_virtual_network" in k and "module.vnet" in k)
-        assert "create" in plan.resource_changes[key]["change"]["actions"]
 
-    def test_nsg_app_present(self, plan):
-        nsg = [k for k in plan.resource_changes if "azurerm_network_security_group" in k and "module.nsg_app" in k]
-        assert len(nsg) > 0, "Expected NSG resource under module.nsg_app"
+def test_data_subnet_present(plan):
+    module = plan.modules["module.vnet"]
+    assert any(VALID_SUBNET_DATA_NAME in k for k in module.resources)
 
-    def test_nsg_subnet_association_present(self, plan):
-        assert "azurerm_subnet_network_security_group_association.app" in plan.resource_changes
 
-    def test_nsg_subnet_association_action_create(self, plan):
-        assoc = plan.resource_changes["azurerm_subnet_network_security_group_association.app"]
-        assert "create" in assoc["change"]["actions"]
+def test_app_subnet_web_delegation(plan):
+    module = plan.modules["module.vnet"]
+    key = next(k for k in module.resources if VALID_SUBNET_APP_NAME in k)
+    subnet = module.resources[key]
+    delegations = subnet["values"].get("delegation", [])
+    service_names = [d["service_delegation"][0]["name"] for d in delegations if d.get("service_delegation")]
+    assert "Microsoft.Web/serverFarms" in service_names
 
-    # ── MySQL Private DNS ─────────────────────────────────────────────────────
 
-    def test_mysql_private_dns_zone_present(self, plan):
-        assert "azurerm_private_dns_zone.mysql" in plan.resource_changes
+def test_data_subnet_mysql_delegation(plan):
+    module = plan.modules["module.vnet"]
+    key = next(k for k in module.resources if VALID_SUBNET_DATA_NAME in k)
+    subnet = module.resources[key]
+    delegations = subnet["values"].get("delegation", [])
+    service_names = [d["service_delegation"][0]["name"] for d in delegations if d.get("service_delegation")]
+    assert "Microsoft.DBforMySQL/flexibleServers" in service_names
 
-    def test_mysql_private_dns_zone_action_create(self, plan):
-        dns = plan.resource_changes["azurerm_private_dns_zone.mysql"]
-        assert "create" in dns["change"]["actions"]
 
-    def test_mysql_private_dns_zone_name(self, plan):
-        dns = plan.resource_changes["azurerm_private_dns_zone.mysql"]
-        assert dns["change"]["after"]["name"] == "privatelink.mysql.database.azure.com"
+# ── NSG ───────────────────────────────────────────────────────────────────────
 
-    def test_mysql_private_dns_vnet_link_present(self, plan):
-        assert "azurerm_private_dns_zone_virtual_network_link.mysql" in plan.resource_changes
+def test_nsg_app_name(plan):
+    module = plan.modules["module.nsg_app"]
+    nsg = module.resources["azurerm_network_security_group.this"]
+    assert nsg["values"]["name"] == VALID_NSG_APP_NAME
 
-    def test_mysql_private_dns_vnet_link_action_create(self, plan):
-        link = plan.resource_changes["azurerm_private_dns_zone_virtual_network_link.mysql"]
-        assert "create" in link["change"]["actions"]
 
-    # ── App Service ───────────────────────────────────────────────────────────
+def test_nsg_https_rule_present(plan):
+    module = plan.modules["module.nsg_app"]
+    nsg = module.resources["azurerm_network_security_group.this"]
+    rules = nsg["values"].get("security_rule", [])
+    https_rules = [r for r in rules if r.get("destination_port_range") == "443" and r.get("access") == "Allow"]
+    assert len(https_rules) > 0, "Expected an inbound Allow-443 security rule"
 
-    def test_app_service_plan_present(self, plan):
-        asp = [k for k in plan.resource_changes if "azurerm_service_plan" in k and "module.app_service_plan" in k]
-        assert len(asp) > 0, "Expected App Service Plan under module.app_service_plan"
 
-    def test_app_service_plan_action_create(self, plan):
-        key = next(k for k in plan.resource_changes if "azurerm_service_plan" in k and "module.app_service_plan" in k)
-        assert "create" in plan.resource_changes[key]["change"]["actions"]
+def test_nsg_subnet_association_present(plan):
+    assert "azurerm_subnet_network_security_group_association.app" in plan.resource_changes
 
-    def test_linux_web_app_present(self, plan):
-        apps = [k for k in plan.resource_changes if "azurerm_linux_web_app" in k and "module.app_service" in k]
-        assert len(apps) > 0, "Expected Linux Web App under module.app_service"
 
-    def test_linux_web_app_action_create(self, plan):
-        key = next(k for k in plan.resource_changes if "azurerm_linux_web_app" in k and "module.app_service" in k)
-        assert "create" in plan.resource_changes[key]["change"]["actions"]
+# ── App Service Plan ──────────────────────────────────────────────────────────
 
-    # ── MySQL Flexible Server ─────────────────────────────────────────────────
+def test_asp_name(plan):
+    module = plan.modules["module.app_service_plan"]
+    asp = module.resources["azurerm_service_plan.this"]
+    assert asp["values"]["name"] == VALID_ASP_NAME
 
-    def test_mysql_flexible_server_present(self, plan):
-        mysql = [k for k in plan.resource_changes if "azurerm_mysql_flexible_server" in k and "module.mysql" in k]
-        assert len(mysql) > 0, "Expected MySQL Flexible Server under module.mysql"
 
-    def test_mysql_flexible_server_action_create(self, plan):
-        key = next(k for k in plan.resource_changes if "azurerm_mysql_flexible_server" in k and "module.mysql" in k)
-        assert "create" in plan.resource_changes[key]["change"]["actions"]
+def test_asp_os_type_linux(plan):
+    module = plan.modules["module.app_service_plan"]
+    asp = module.resources["azurerm_service_plan.this"]
+    assert asp["values"]["os_type"] == "Linux"
 
-    # ── Storage Account (module.storage) ──────────────────────────────────────
 
-    def test_storage_account_present(self, plan):
-        sa = [k for k in plan.resource_changes if "azurerm_storage_account" in k and "module.storage" in k]
-        assert len(sa) > 0, "Expected storage account under module.storage"
+def test_asp_action_create(plan):
+    key = next(k for k in plan.resource_changes if "azurerm_service_plan" in k and "module.app_service_plan" in k)
+    assert "create" in plan.resource_changes[key]["change"]["actions"]
 
-    def test_storage_account_action_create(self, plan):
-        key = next(k for k in plan.resource_changes if "azurerm_storage_account" in k and "module.storage" in k)
-        assert "create" in plan.resource_changes[key]["change"]["actions"]
 
-    def test_storage_tls_enforced(self, plan):
-        key = next(k for k in plan.resource_changes if "azurerm_storage_account" in k and "module.storage" in k)
-        sa = plan.resource_changes[key]
-        assert sa["change"]["after"]["min_tls_version"] == "TLS1_2"
+# ── App Service ───────────────────────────────────────────────────────────────
 
-    def test_uploads_container_present(self, plan):
-        containers = [k for k in plan.resource_changes if "azurerm_storage_container" in k and "uploads" in k]
-        assert len(containers) > 0, "Expected 'uploads' storage container under module.storage"
+def test_app_name(plan):
+    module = plan.modules["module.app_service"]
+    app = module.resources["azurerm_linux_web_app.this"]
+    assert app["values"]["name"] == VALID_APP_NAME
 
-    def test_backups_container_present(self, plan):
-        containers = [k for k in plan.resource_changes if "azurerm_storage_container" in k and "backups" in k]
-        assert len(containers) > 0, "Expected 'backups' storage container under module.storage"
 
-    def test_both_containers_action_create(self, plan):
-        containers = [
-            v for k, v in plan.resource_changes.items()
-            if "azurerm_storage_container" in k and "module.storage" in k
-        ]
-        assert len(containers) >= 2, "Expected at least 2 storage containers under module.storage"
-        for c in containers:
-            assert "create" in c["change"]["actions"]
+def test_app_action_create(plan):
+    key = next(k for k in plan.resource_changes if "azurerm_linux_web_app" in k and "module.app_service" in k)
+    assert "create" in plan.resource_changes[key]["change"]["actions"]
 
-    # ── Outputs ───────────────────────────────────────────────────────────────
 
-    def test_all_outputs_declared(self, plan):
-        expected = {
-            "vnet_id",
-            "app_service_hostname",
-            "mysql_server_name",
-            "mysql_server_fqdn",
-            "storage_account_name",
-            "storage_blob_endpoint",
-        }
-        missing = expected - set(plan.outputs.keys())
-        assert not missing, f"Missing outputs: {missing}"
+# ── MySQL Private DNS ─────────────────────────────────────────────────────────
+
+def test_mysql_private_dns_zone_name(plan):
+    dns = plan.resource_changes["azurerm_private_dns_zone.mysql"]
+    assert dns["change"]["after"]["name"] == VALID_MYSQL_DNS_ZONE
+
+
+def test_mysql_dns_zone_action_create(plan):
+    dns = plan.resource_changes["azurerm_private_dns_zone.mysql"]
+    assert "create" in dns["change"]["actions"]
+
+
+def test_mysql_dns_vnet_link_present(plan):
+    assert "azurerm_private_dns_zone_virtual_network_link.mysql" in plan.resource_changes
+
+
+# ── MySQL Flexible Server ─────────────────────────────────────────────────────
+
+def test_mysql_name(plan):
+    module = plan.modules["module.mysql"]
+    mysql = module.resources["azurerm_mysql_flexible_server.this"]
+    assert mysql["values"]["name"] == VALID_MYSQL_NAME
+
+
+def test_mysql_version(plan):
+    module = plan.modules["module.mysql"]
+    mysql = module.resources["azurerm_mysql_flexible_server.this"]
+    assert mysql["values"]["version"] == VALID_MYSQL_VERSION
+
+
+def test_mysql_admin_username(plan):
+    module = plan.modules["module.mysql"]
+    mysql = module.resources["azurerm_mysql_flexible_server.this"]
+    assert mysql["values"]["administrator_login"] == "mysqladmin"
+
+
+def test_mysql_action_create(plan):
+    key = next(k for k in plan.resource_changes if "azurerm_mysql_flexible_server" in k and "module.mysql" in k)
+    assert "create" in plan.resource_changes[key]["change"]["actions"]
+
+
+# ── Storage Account ───────────────────────────────────────────────────────────
+
+def test_storage_account_name(plan):
+    key = next(k for k in plan.resource_changes if "azurerm_storage_account" in k and "module.storage" in k)
+    assert plan.resource_changes[key]["change"]["after"]["name"] == VALID_STORAGE_NAME
+
+
+def test_storage_tls_version(plan):
+    key = next(k for k in plan.resource_changes if "azurerm_storage_account" in k and "module.storage" in k)
+    assert plan.resource_changes[key]["change"]["after"]["min_tls_version"] == "TLS1_2"
+
+
+def test_storage_action_create(plan):
+    key = next(k for k in plan.resource_changes if "azurerm_storage_account" in k and "module.storage" in k)
+    assert "create" in plan.resource_changes[key]["change"]["actions"]
+
+
+def test_uploads_container_present(plan):
+    containers = [k for k in plan.resource_changes if "azurerm_storage_container" in k and "uploads" in k]
+    assert len(containers) > 0, "Expected 'uploads' storage container"
+
+
+def test_backups_container_present(plan):
+    containers = [k for k in plan.resource_changes if "azurerm_storage_container" in k and "backups" in k]
+    assert len(containers) > 0, "Expected 'backups' storage container"
+
+
+def test_containers_are_private(plan):
+    containers = {k: v for k, v in plan.resource_changes.items() if "azurerm_storage_container" in k and "module.storage" in k}
+    assert len(containers) >= 2, "Expected at least 2 containers under module.storage"
+    for k, v in containers.items():
+        access = v["change"]["after"].get("container_access_type", "private")
+        assert access in ("private", "", None), f"Container {k} must be private, got {access!r}"
+
+
+# ── Outputs ───────────────────────────────────────────────────────────────────
+
+def test_all_outputs_declared(plan):
+    expected = {
+        "vnet_id",
+        "app_service_hostname",
+        "mysql_server_name",
+        "mysql_server_fqdn",
+        "storage_account_name",
+        "storage_blob_endpoint",
+    }
+    missing = expected - set(plan.outputs.keys())
+    assert not missing, f"Missing outputs: {missing}"
