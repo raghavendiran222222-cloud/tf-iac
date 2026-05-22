@@ -1,15 +1,15 @@
-name: Terraform Tests
+name: Module Tests
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, alz-modules]
     paths:
-      - "non-prod/**/tests/**"
-      - "non-prod/**/*.tf"
-      - ".github/workflows/tftest.yml"
+      - "*/tests/**"
+      - "**/*.tf"
+      - ".github/workflows/module-tests.yml"
 
 concurrency:
-  group: tftest-${{ github.event.number }}
+  group: module-tests-${{ github.event.number }}
   cancel-in-progress: true
 
 jobs:
@@ -22,18 +22,18 @@ jobs:
         with:
           fetch-depth: 0
       - id: detect
-        run: bash scripts/detect-changed-envs.sh >> "$GITHUB_OUTPUT"
+        run: bash scripts/detect-changed-modules.sh >> "$GITHUB_OUTPUT"
 
-  tftest:
+  test:
     needs: detect
     if: needs.detect.outputs.changed != '[]'
-    name: tftest (${{ matrix.target }})
+    name: test (${{ matrix.module }})
     strategy:
       fail-fast: false
       matrix:
-        target: ${{ fromJson(needs.detect.outputs.changed) }}
+        module: ${{ fromJson(needs.detect.outputs.changed) }}
     uses: btdmsd/github-actions-workflows/.github/workflows/module-tests.yml@main
     with:
-      working-directory: non-prod/${{ matrix.target }}
+      working-directory: ${{ matrix.module }}
       environment: non-prod-plan
     secrets: inherit
