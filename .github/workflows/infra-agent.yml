@@ -1,0 +1,98 @@
+name: infra-agent
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "non-prod/infra-agent/**"
+  push:
+    branches: [main]
+    paths:
+      - "non-prod/infra-agent/**"
+
+concurrency:
+  group: infra-agent-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  fmt-validate:
+    if: github.event_name == 'pull_request'
+    uses: btdmsd/github-actions-workflows/.github/workflows/fmt-validate.yaml@main
+    with:
+      working-directory: non-prod/infra-agent
+    secrets: inherit
+
+  plan:
+    if: github.event_name == 'pull_request'
+    uses: btdmsd/github-actions-workflows/.github/workflows/plan.yaml@main
+    with:
+      working-directory: non-prod/infra-agent
+      environment: non-prod-plan
+    secrets: inherit
+
+  checkov:
+    needs: plan
+    if: github.event_name == 'pull_request'
+    uses: btdmsd/github-actions-workflows/.github/workflows/checkov.yaml@main
+    with:
+      working-directory: non-prod/infra-agent
+    secrets: inherit
+
+  tftest:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~> 1.9"
+          terraform_wrapper: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        working-directory: non-prod/infra-agent
+        run: |
+          if [[ -f tests/requirements.txt ]]; then
+            pip install -r tests/requirements.txt
+          else
+            pip install pytest python-tftest
+          fi
+
+      - name: Terraform Init (no backend)
+        working-directory: non-prod/infra-agent
+        run: terraform init -backend=false
+        env:
+          TF_CLI_ARGS_init: "-backend=false"
+
+      - name: pytest (plan-level)
+        working-directory: non-prod/infra-agent
+        env:
+          TF_CLI_ARGS_init: "-backend=false"
+        run: |
+          mapfile -t files < <(ls tests/*.py 2>/dev/null | grep -v e2e || true)
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "No plan-level pytest files — skipping"
+          else
+            pytest -v --tb=short "${files[@]}"
+          fi
+
+      - name: terraform test (HCL)
+        working-directory: non-prod/infra-agent
+        run: |
+          if ls tests/*.tftest.hcl 2>/dev/null; then
+            terraform test -test-directory=tests
+          else
+            echo "No .tftest.hcl files — skipping"
+          fi
+
+  deploy:
+    if: github.event_name == 'push'
+    uses: btdmsd/github-actions-workflows/.github/workflows/apply.yaml@main
+    with:
+      working-directory: non-prod/infra-agent
+      environment: non-prod-infra-agent
+    secrets: inherit
