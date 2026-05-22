@@ -1,14 +1,11 @@
 name: Module Tests
 
 on:
-  push:
-    branches: ["**"]
-    paths:
-      - "**-module/**"
   pull_request:
-    branches: ["**"]
+    branches: [main, alz-modules]
     paths:
-      - "**-module/**"
+      - "*-module/**"
+      - ".github/workflows/module-tests.yml"
   workflow_dispatch:
     inputs:
       test_type:
@@ -21,9 +18,33 @@ on:
           - e2e
           - all
 
+concurrency:
+  group: module-tests-${{ github.event.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.detect.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: detect
+        run: bash scripts/detect-changed-modules.sh >> "$GITHUB_OUTPUT"
+
   test:
+    needs: detect
+    if: needs.detect.outputs.changed != '[]'
+    name: test (${{ matrix.module }})
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJson(needs.detect.outputs.changed) }}
     uses: btdmsd/github-actions-workflows/.github/workflows/module-tests.yml@main
     with:
+      working-directory: ${{ matrix.module }}
       test_type: ${{ inputs.test_type || 'plan' }}
+      environment: non-prod-plan
     secrets: inherit
