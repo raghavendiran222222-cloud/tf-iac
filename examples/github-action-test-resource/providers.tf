@@ -1,7 +1,8 @@
 terraform {
-  required_version = "~> 1.9"
+  required_version = ">= 1.9.0, < 2.0.0"
 
   cloud {
+    organization = "bdtmsd"
     workspaces {
       name = "github-action-test-resource"
     }
@@ -10,7 +11,7 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 4.0"
+      version = "~> 4.71"
     }
   }
 }

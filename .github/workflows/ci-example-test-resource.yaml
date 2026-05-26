@@ -2,14 +2,18 @@ name: CI — github-action-test-resource
 
 on:
   push:
-    paths:
-      - "examples/github-action-test-resource/**"
-      - ".github/workflows/ci-example-test-resource.yaml"
   pull_request:
     paths:
       - "examples/github-action-test-resource/**"
       - ".github/workflows/ci-example-test-resource.yaml"
   workflow_dispatch:
+    inputs:
+      destroy:
+        description: "Run destroy instead of the normal pipeline"
+        required: false
+        default: "false"
+        type: choice
+        options: ["false", "true"]
 
 permissions:
   id-token: write
@@ -23,31 +27,33 @@ concurrency:
 jobs:
   # ── Static checks (no credentials needed) ─────────────────────────────────
   fmt-validate:
+    if: github.event.inputs.destroy != 'true'
     uses: ./.github/workflows/fmt-validate.yaml
     with:
       working-directory: examples/github-action-test-resource
 
   # ── Plan-level tests (terraform init -backend=false + pytest + tftest HCL) ─
   tf-test-plan:
+    if: github.event.inputs.destroy != 'true'
     uses: ./.github/workflows/tf-test.yaml
     secrets: inherit
     with:
       working-directory: examples/github-action-test-resource
       repo-type: app
       test-type: plan
-      environment: non-prod-plan
 
   # ── Terraform plan (uploads tfplan artifact for checkov) ──────────────────
   plan:
+    if: github.event.inputs.destroy != 'true'
     uses: ./.github/workflows/plan.yaml
     secrets: inherit
     with:
       working-directory: examples/github-action-test-resource
-      environment: non-prod-plan
 
   # ── Security scan against plan JSON ───────────────────────────────────────
   checkov:
     needs: plan
+    if: github.event.inputs.destroy != 'true'
     uses: ./.github/workflows/checkov.yaml
     with:
       working-directory: examples/github-action-test-resource
@@ -56,21 +62,27 @@ jobs:
   # ── Apply (main branch only, all gates must pass) ─────────────────────────
   apply:
     needs: [fmt-validate, tf-test-plan, plan, checkov]
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.event.inputs.destroy != 'true'
     uses: ./.github/workflows/apply.yaml
     secrets: inherit
     with:
       working-directory: examples/github-action-test-resource
-      environment: non-prod
 
   # ── End-to-end tests (runs after real infra is deployed) ──────────────────
   tf-test-e2e:
     needs: apply
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.event.inputs.destroy != 'true'
     uses: ./.github/workflows/tf-test.yaml
     secrets: inherit
     with:
       working-directory: examples/github-action-test-resource
       repo-type: app
       test-type: e2e
-      environment: non-prod
+
+  # ── Manual destroy (workflow_dispatch with destroy=true) ──────────────────
+  destroy:
+    if: github.event.inputs.destroy == 'true'
+    uses: ./.github/workflows/destroy.yaml
+    secrets: inherit
+    with:
+      working-directory: examples/github-action-test-resource

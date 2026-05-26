@@ -17,12 +17,6 @@ on:
         required: false
         default: plan
         type: string
-      environment:
-        description: "GitHub environment for OIDC credentials"
-        required: false
-        default: non-prod-plan
-        type: string
-
 # ── Plan-level tests ───────────────────────────────────────────────────────────
 # Runs pytest (non-e2e) for modules, and pytest + terraform test for apps.
 # No real Azure resources are deployed.
@@ -31,20 +25,42 @@ jobs:
     name: "plan-tests (${{ inputs.working-directory }})"
     if: inputs.test-type == 'plan' || inputs.test-type == 'all'
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
     permissions:
       id-token: write
       contents: read
+    env:
+      ARM_USE_OIDC: "true"
 
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
 
+      - name: Fetch secrets from HCP Vault Dedicated
+        uses: hashicorp/vault-action@v4.0.0
+        with:
+          url: ${{ secrets.VAULT_ADDR }}
+          namespace: admin
+          method: jwt
+          role: github-actions
+          jwtGithubAudience: https://github.com/bdtmsd
+          exportEnv: true
+          secrets: |
+            azure/data/github-actions     client_id        | ARM_CLIENT_ID ;
+            azure/data/github-actions     tenant_id        | ARM_TENANT_ID ;
+            azure/data/github-actions     subscription_id  | ARM_SUBSCRIPTION_ID ;
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "~> 1.9"
           terraform_wrapper: false
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.ARM_CLIENT_ID }}
+          tenant-id: ${{ env.ARM_TENANT_ID }}
+          subscription-id: ${{ env.ARM_SUBSCRIPTION_ID }}
 
       - uses: actions/setup-python@v5
         with:
@@ -65,14 +81,13 @@ jobs:
       - name: Terraform Init — app (working-directory root)
         if: inputs.repo-type == 'app'
         working-directory: "${{ inputs.working-directory }}"
-        run: terraform init -backend=false
-        env:
-          TF_CLI_ARGS_init: "-backend=false"
+        run: |
+          printf 'terraform {\n  backend "local" {}\n}\n' > cloud_override.tf
+          terraform init -reconfigure -input=false
 
       - name: Run plan-level pytest
         working-directory: "${{ inputs.working-directory }}/tests"
         env:
-          TF_CLI_ARGS_init: "-backend=false"
           TF_VAR_mysql_admin_password: ${{ secrets.TF_VAR_MYSQL_ADMIN_PASSWORD }}
         run: |
           mapfile -t files < <(ls test_*.py 2>/dev/null | grep -v e2e || true)
@@ -98,7 +113,6 @@ jobs:
     name: "e2e-tests (${{ inputs.working-directory }})"
     if: inputs.test-type == 'e2e' || inputs.test-type == 'all'
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
     permissions:
       id-token: write
       contents: read
@@ -111,21 +125,26 @@ jobs:
           persist-credentials: false
 
       - name: Fetch secrets from HCP Vault Dedicated
-        uses: hashicorp/vault-action@v3
+        uses: hashicorp/vault-action@v4.0.0
         with:
           url: ${{ secrets.VAULT_ADDR }}
+          namespace: admin
           method: jwt
-          role: ${{ secrets.VAULT_ROLE }}
+          role: github-actions
+          jwtGithubAudience: https://github.com/bdtmsd
           exportEnv: true
           secrets: |
-            kv/data/azure client_id        | AZURE_CLIENT_ID ;
-            kv/data/azure tenant_id        | AZURE_TENANT_ID ;
-            kv/data/azure subscription_id  | AZURE_SUBSCRIPTION_ID ;
+            azure/data/github-actions     client_id        | ARM_CLIENT_ID ;
+            azure/data/github-actions     tenant_id        | ARM_TENANT_ID ;
+            azure/data/github-actions     subscription_id  | ARM_SUBSCRIPTION_ID ;
+            azure/data/github-actions     tfe_token        | TFE_TOKEN ;
+            azure/data/github-actions     tf_organization  | TF_CLOUD_ORGANIZATION ;
 
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "~> 1.9"
           terraform_wrapper: false
+          cli_config_credentials_token: ${{ env.TFE_TOKEN }}
 
       - uses: actions/setup-python@v5
         with:
@@ -136,9 +155,18 @@ jobs:
       - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
-          client-id: ${{ env.AZURE_CLIENT_ID }}
-          tenant-id: ${{ env.AZURE_TENANT_ID }}
-          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ env.ARM_CLIENT_ID }}
+          tenant-id: ${{ env.ARM_TENANT_ID }}
+          subscription-id: ${{ env.ARM_SUBSCRIPTION_ID }}
+
+      - name: Set HCP Terraform workspace to local execution
+        run: |
+          workspace=$(basename "${{ inputs.working-directory }}")
+          curl -sf -X PATCH \
+            -H "Authorization: Bearer ${{ env.TFE_TOKEN }}" \
+            -H "Content-Type: application/vnd.api+json" \
+            --data '{"data":{"type":"workspaces","attributes":{"execution-mode":"local"}}}' \
+            "https://app.terraform.io/api/v2/organizations/${{ env.TF_CLOUD_ORGANIZATION }}/workspaces/${workspace}"
 
       - name: Install Python dependencies
         run: pip install -r "${{ inputs.working-directory }}/tests/requirements.txt"
@@ -148,7 +176,7 @@ jobs:
         env:
           TF_VAR_mysql_admin_password: ${{ secrets.TF_VAR_MYSQL_ADMIN_PASSWORD }}
         run: |
-          mapfile -t files < <(ls test_*e2e*.py 2>/dev/null || true)
+          mapfile -t files < <(ls test_*e2e.py test_e2e*.py 2>/dev/null | sort -u || true)
           if [[ ${#files[@]} -eq 0 ]]; then
             echo "No e2e test files found — skipping."
           else

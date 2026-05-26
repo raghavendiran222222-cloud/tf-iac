@@ -1,4 +1,4 @@
-name: Terraform Apply (reusable)
+name: Terraform Destroy (reusable)
 
 on:
   workflow_call:
@@ -8,8 +8,8 @@ on:
         type: string
 
 jobs:
-  apply:
-    name: apply (${{ inputs.working-directory }})
+  destroy:
+    name: destroy (${{ inputs.working-directory }})
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -39,7 +39,7 @@ jobs:
           azure/data/github-actions     tenant_id            | ARM_TENANT_ID ;
           azure/data/github-actions     subscription_id      | ARM_SUBSCRIPTION_ID ;
           azure/data/github-actions     tfe_token            | TFE_TOKEN ;
-          azure/data/github-actions     tf_organization | TF_CLOUD_ORGANIZATION ;
+          azure/data/github-actions     tf_organization      | TF_CLOUD_ORGANIZATION ;
 
     - uses: hashicorp/setup-terraform@v3
       with:
@@ -66,8 +66,5 @@ jobs:
     - name: Terraform Init
       run: terraform init -input=false
 
-    - name: Terraform Plan
-      run: terraform plan -input=false -out=tfplan
-
-    - name: Terraform Apply
-      run: terraform apply -input=false -auto-approve tfplan
+    - name: Terraform Destroy
+      run: terraform destroy -input=false -auto-approve

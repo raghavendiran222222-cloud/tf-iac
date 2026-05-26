@@ -26,10 +26,16 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Sanitize artifact name
+        id: artifact-name
+        run: |
+          safe=$(echo "${{ inputs.working-directory }}" | tr '/' '-')
+          echo "name=tfplan-${{ github.run_id }}-${safe}" >> "$GITHUB_OUTPUT"
+
       - name: Download plan artifact
         uses: actions/download-artifact@v4
         with:
-          name: tfplan-${{ github.event.number }}-${{ inputs.working-directory }}
+          name: ${{ steps.artifact-name.outputs.name }}
           path: ${{ inputs.working-directory }}
 
       - name: Checkov Policy Scan

@@ -39,5 +39,8 @@ jobs:
         with:
           tflint_version: v0.55.0
 
+      - name: tflint init
+        run: tflint --init --config "$GITHUB_WORKSPACE/.tflint.hcl"
+
       - name: tflint
         run: tflint --chdir="$GITHUB_WORKSPACE/${{ inputs.working-directory }}" --config "$GITHUB_WORKSPACE/.tflint.hcl" --format compact

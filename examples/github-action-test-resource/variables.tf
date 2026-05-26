@@ -14,8 +14,16 @@ variable "tags" {
   type        = map(string)
   description = "Tags applied to every resource."
   default = {
-    environment = "test"
-    managed-by  = "terraform"
-    purpose     = "github-actions-testing"
+    Application         = "github-actions-workflows-test-resource"
+    DevOwner            = "raghavendirann@bdtmsd.com"
+    BusinessOwner       = "oleg@bdtmsd.com"
+    Environment         = "sandbox"
+    DataClassification  = "Internal"
+    BusinessCriticality = "Low"
+    IACRepository       = "https://github.com/bdtmsd/github-actions-workflows"
+    CostCenter          = ""
+    Compliance          = ""
+    managed-by          = "terraform"
+    purpose             = "github-actions-testing"
   }
 }
